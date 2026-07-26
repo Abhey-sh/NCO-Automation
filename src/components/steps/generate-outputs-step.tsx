@@ -1,12 +1,13 @@
-import { motion } from 'framer-motion'
-import { ArrowLeft, Files } from 'lucide-react'
+import { motion } from "framer-motion";
+import { ArrowLeft, Files } from "lucide-react";
 
-import { AccountMetadataCard } from '../imports/account-metadata-card'
-import { Button } from '../ui/button'
-import { useAppStore } from '../../store/app-store'
+import { AccountMetadataCard } from "../imports/account-metadata-card";
+import { MembershipCancellationCard } from "../imports/membership-cancellation-card";
+import { Button } from "../ui/button";
+import { useAppStore } from "../../store/app-store";
 
 export function GenerateOutputsStep() {
-  const setCurrentStep = useAppStore((state) => state.setCurrentStep)
+  const setCurrentStep = useAppStore((state) => state.setCurrentStep);
 
   return (
     <motion.div
@@ -18,8 +19,12 @@ export function GenerateOutputsStep() {
       <div className="rounded-[32px] border border-slate-200/70 bg-white/80 p-7 shadow-[0_25px_80px_-30px_rgba(15,23,42,0.25)] backdrop-blur-xl dark:border-slate-800/80 dark:bg-slate-900/70">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-sm font-medium uppercase tracking-[0.3em] text-blue-600">Step 4</p>
-            <h2 className="mt-2 text-3xl font-semibold text-slate-900 dark:text-white">Generate Outputs</h2>
+            <p className="text-sm font-medium uppercase tracking-[0.3em] text-blue-600">
+              Step 4
+            </p>
+            <h2 className="mt-2 text-3xl font-semibold text-slate-900 dark:text-white">
+              Generate Outputs
+            </h2>
             <p className="mt-2 max-w-2xl text-sm leading-7 text-slate-600 dark:text-slate-300">
               Generate, preview, and download migration import files.
             </p>
@@ -32,13 +37,17 @@ export function GenerateOutputsStep() {
       </div>
 
       <AccountMetadataCard />
-      
+      <MembershipCancellationCard />
 
       <div>
-        <Button variant="secondary" onClick={() => setCurrentStep(3)} className="px-6 py-3">
+        <Button
+          variant="secondary"
+          onClick={() => setCurrentStep(3)}
+          className="px-6 py-3"
+        >
           <ArrowLeft className="h-4 w-4" /> Back
         </Button>
       </div>
     </motion.div>
-  )
+  );
 }

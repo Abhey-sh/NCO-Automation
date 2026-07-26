@@ -15,24 +15,20 @@ import { Card, CardContent } from "../ui/card";
 import { Toast } from "../ui/toast";
 import { ImportPreviewTable } from "./import-preview-table";
 import { createCsv, downloadCsv, type CsvColumn } from "../../lib/csv";
-import { generateAccountMetadata } from "../../services/import-service";
+import { generateMembershipCancellation } from "../../services/import-service";
 import { useAppStore } from "../../store/app-store";
-import type { AccountMetadataRow } from "../../types/imports";
+import type { MembershipCancellationRow } from "../../types/imports";
 
-const accountMetadataColumns: CsvColumn<AccountMetadataRow>[] = [
-  { key: "userForeignId", header: "userForeignId" },
-  { key: "studioForeignId", header: "studioForeignId" },
-  { key: "studioId", header: "studioId" },
+const membershipCancellationColumns: CsvColumn<MembershipCancellationRow>[] = [
   { key: "email", header: "email" },
+  { key: "userId", header: "userId" },
 ];
 
-export function AccountMetadataCard() {
-  const studioId = useAppStore(
-    (state) => state.configurationState.studioId ?? "",
-  );
+export function MembershipCancellationCard() {
   const reviewedMappings = useAppStore((state) => state.reviewedMappings);
-  const rows = useAppStore((state) => state.accountMetadataRows);
-  const setRows = useAppStore((state) => state.setAccountMetadataRows);
+  const membershipLookup = useAppStore((state) => state.membershipPlanLookup);
+  const rows = useAppStore((state) => state.membershipCancellationRows);
+  const setRows = useAppStore((state) => state.setMembershipCancellationRows);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState("");
   const [toastMessage, setToastMessage] = useState("");
@@ -45,9 +41,10 @@ export function AccountMetadataCard() {
   }, [toastMessage]);
 
   const handleGenerate = async () => {
-    const normalizedStudioId = studioId.trim();
-    if (!normalizedStudioId) {
-      setError("Studio ID is required before generating Account Metadata.");
+    if (membershipLookup.length === 0) {
+      setError(
+        "Membership + Plan Name lookup file is required before generating Membership Cancellation.",
+      );
       return;
     }
 
@@ -60,14 +57,14 @@ export function AccountMetadataCard() {
     setIsGenerating(true);
 
     try {
-      const generatedRows = await generateAccountMetadata({
-        studioId: normalizedStudioId,
-        mappings: reviewedMappings,
-      });
+      const generatedRows = await generateMembershipCancellation({
+  reviewMappings: reviewedMappings,
+  membershipLookup,
+});
       setRows(generatedRows);
       setShowPreview(false);
       setToastMessage(
-        `Account Metadata generated successfully: ${generatedRows.length} rows.`,
+        `Membership Cancellation generated successfully: ${generatedRows.length} rows.`,
       );
     } catch (generationError) {
       setError(
@@ -86,8 +83,8 @@ export function AccountMetadataCard() {
       return;
     }
 
-    const csv = createCsv(rows, accountMetadataColumns);
-    downloadCsv("account_metadata.csv", csv);
+    const csv = createCsv(rows, membershipCancellationColumns);
+    downloadCsv("membership_cancellation.csv", csv);
   };
 
   return (
@@ -103,11 +100,11 @@ export function AccountMetadataCard() {
               </div>
               <div>
                 <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
-                  Account Metadata
+                  Membership Cancellation
                 </h3>
                 <p className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">
-                  Generate account metadata from the completed Review Mapping
-                  results.
+                  Generate Membership Cancellation from the completed Review
+                  Mapping results.
                 </p>
               </div>
             </div>
@@ -151,7 +148,8 @@ export function AccountMetadataCard() {
                   </>
                 ) : (
                   <span className="text-slate-400">
-                    Generate Account Metadata to enable preview and download.
+                    Generate Membership Cancellation to enable preview and
+                    download.
                   </span>
                 )}
               </div>
@@ -196,7 +194,7 @@ export function AccountMetadataCard() {
               >
                 <ImportPreviewTable
                   rows={rows}
-                  columns={accountMetadataColumns}
+                  columns={membershipCancellationColumns}
                 />
               </motion.div>
             )}

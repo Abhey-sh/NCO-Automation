@@ -1,7 +1,16 @@
 from fastapi import APIRouter, HTTPException, status
 
-from app.schemas.imports import AccountMetadataRequest, AccountMetadataRow
+from app.schemas.imports import (
+    AccountMetadataRequest,
+    AccountMetadataRow,
+    MembershipCancellationRequest,
+    MembershipCancellationRow,
+)
+
 from app.services.imports.account_metadata import generate_account_metadata
+from app.services.imports.membership_cancellation import (
+    generate_membership_cancellation,
+)
 
 router = APIRouter(prefix="/imports", tags=["imports"])
 
@@ -22,6 +31,26 @@ def create_account_metadata_import(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No matched students available.",
+        )
+
+    return rows
+
+@router.post(
+    "/membership-cancellation",
+    response_model=list[MembershipCancellationRow],
+)
+def create_membership_cancellation_import(
+    request: MembershipCancellationRequest,
+) -> list[MembershipCancellationRow]:
+    rows = generate_membership_cancellation(
+        request.reviewMappings,
+        request.membershipLookup,
+    )
+
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No matched memberships available.",
         )
 
     return rows

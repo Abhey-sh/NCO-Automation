@@ -6,14 +6,15 @@ import { ArrowLeft, CheckCircle2, Phone, Search, Sparkles, UserCheck2, XCircle }
 import { Button } from '../ui/button'
 import { Card, CardContent } from '../ui/card'
 import { buildReviewMappingRows, computeSimilarity, type ReviewMappingRow } from '../../services/review-mapping'
-import { useAppStore, type MemberRecord } from '../../store/app-store'
+import { useAppStore } from '../../store/app-store'
+import type { Member } from '../../services/excel-parser'
 import { cn } from '../../lib/utils'
 
 const filterOptions = ['All', 'Matched', 'Not Matched'] as const
 
 type FilterValue = (typeof filterOptions)[number]
 
-function getSuggestionRank(member: MemberRecord, query: string) {
+function getSuggestionRank(member: Member, query: string) {
   const normalizedQuery = query.trim().toLowerCase()
   const fullName = `${member.firstName} ${member.lastName}`.trim().toLowerCase()
   const firstName = member.firstName.toLowerCase()
@@ -164,7 +165,7 @@ export function ReviewMappingStep() {
     )
   }
 
-  const handleSuggestionSelect = (studentName: string, member: MemberRecord) => {
+  const handleSuggestionSelect = (studentName: string, member: Member) => {
     const displayName = `${member.firstName} ${member.lastName}`.trim()
 
     setRows((currentRows) =>
@@ -231,7 +232,7 @@ export function ReviewMappingStep() {
     setActiveStudent(null)
   }
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>, studentName: string, suggestions: MemberRecord[]) => {
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>, studentName: string, suggestions: Member[]) => {
     if (!suggestions.length) return
 
     if (event.key === 'Enter') {

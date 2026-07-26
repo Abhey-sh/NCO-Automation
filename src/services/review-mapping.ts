@@ -1,4 +1,5 @@
-import type { MemberRecord, StudentRecord } from '../store/app-store'
+import type { StudentRecord } from '../store/app-store'
+import type { Member } from '../services/excel-parser'
 
 export interface ReviewMappingRow {
   studentName: string
@@ -16,7 +17,7 @@ export interface ReviewMappingRow {
 const normalizeName = (value: string) =>
   value.trim().replace(/\s+/g, ' ').toLowerCase()
 
-const getDisplayName = (member: MemberRecord) => `${member.firstName} ${member.lastName}`.trim()
+const getDisplayName = (member: Member) => `${member.firstName} ${member.lastName}`.trim()
 
 function calculateSimilarity(valueA: string, valueB: string): number {
   const left = normalizeName(valueA)
@@ -62,7 +63,7 @@ function calculateSimilarity(valueA: string, valueB: string): number {
 
 export function buildReviewMappingRows(
   studentRecords: StudentRecord[],
-  members: MemberRecord[],
+  members: Member[],
 ): ReviewMappingRow[] {
   const results = studentRecords.map((record) => {
     const studentName = record.studentName.trim().replace(/\s+/g, ' ')

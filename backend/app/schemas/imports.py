@@ -7,6 +7,7 @@ class ReviewMappingInput(BaseModel):
     email: str = Field(min_length=1)
     student_name: str | None = Field(default=None, alias="studentName")
     matched_member: str | None = Field(default=None, alias="matchedMember")
+    match_type: str = Field(alias="matchType")
 
 
 class AccountMetadataRequest(BaseModel):
@@ -21,3 +22,17 @@ class AccountMetadataRow(BaseModel):
     studioForeignId: str
     studioId: str
     email: str
+
+class MembershipPlanLookupInput(BaseModel):
+    email: str
+    userId: str
+
+class MembershipCancellationRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+    reviewMappings: list[ReviewMappingInput]
+    membershipLookup: list[MembershipPlanLookupInput]
+
+
+class MembershipCancellationRow(BaseModel):
+    email: str
+    userId: str

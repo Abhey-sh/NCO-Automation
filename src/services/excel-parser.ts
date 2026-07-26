@@ -2,17 +2,45 @@ import * as XLSX from 'xlsx'
 
 import type { StudentRecord } from '../store/app-store'
 
+export interface Member {
+  firstName: string
+  lastName: string
+  email: string
+}
+
+export interface MembershipPlanLookup {
+  email: string
+  userId: string
+}
+
+export interface MembershipLookupRow {
+  membershipId: string
+  membershipName: string
+}
+
+export interface UUIDRow {
+  uuid: string
+}
+
+export interface ClassBookingRow {
+  bookingId: string
+}
+
+export interface FutureMembershipRow {
+  membershipName: string
+}
+
 export interface ParsedKPISheet {
   studentNames: string[]
   studentRecords: StudentRecord[]
 }
 
 export interface ParsedMembersSheet {
-  members: Array<{
-    firstName: string
-    lastName: string
-    email: string
-  }>
+  members: Member[]
+}
+
+export interface ParsedMembershipPlanSheet {
+  lookup: MembershipPlanLookup[]
 }
 
 function findColumnKey(row: Record<string, unknown>, keywords: string[]): string | undefined {
@@ -32,150 +60,270 @@ function findColumnKey(row: Record<string, unknown>, keywords: string[]): string
   return undefined
 }
 
-export async function parseKPISheet(file: File): Promise<ParsedKPISheet> {
+async function readWorksheet(
+  file: File,
+): Promise<Array<Record<string, unknown>>> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
 
     reader.onload = (event) => {
       try {
         const data = event.target?.result
-        const workbook = XLSX.read(data, { type: 'binary' })
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-        const rows = XLSX.utils.sheet_to_json(worksheet)
 
-        if (rows.length === 0) {
-          resolve({ studentNames: [], studentRecords: [] })
-          return
-        }
+        const workbook = XLSX.read(data, {
+          type: 'binary',
+        })
 
-        const firstRow = rows[0] as Record<string, unknown>
-        console.log('KPI Sheet columns found:', Object.keys(firstRow))
+        const worksheet =
+          workbook.Sheets[workbook.SheetNames[0]]
 
-        const studentNameKey = findColumnKey(firstRow, ['student name', 'studentname', 'student_name', 'name', 'student'])
-        const phoneNumberKey = findColumnKey(firstRow, [
-          'phone',
-          'phone number',
-          'phone_number',
-          'mobile',
-          'mobile number',
-          'mobile_number',
-          'contact number',
-          'contact_number',
-          'telephone',
-          'telephone number',
-          'cell phone',
-          'phone no',
-          'mobile no',
-        ])
+        const rows = XLSX.utils.sheet_to_json(
+          worksheet,
+        ) as Array<Record<string, unknown>>
 
-        console.log('Student Name column:', studentNameKey, 'Phone column:', phoneNumberKey)
-
-        const studentRecords = (rows as Array<Record<string, unknown>>)
-          .map((row) => {
-            const rawName = studentNameKey ? String(row[studentNameKey] || '').trim() : ''
-            const studentName = rawName.replace(/\s+/g, ' ')
-            const phoneNumber = phoneNumberKey ? String(row[phoneNumberKey] || '').trim() : ''
-
-            if (!studentName) {
-              return null
-            }
-
-            return {
-              studentName,
-              phoneNumber,
-            }
-          })
-          .filter((record): record is StudentRecord => record !== null)
-
-        const studentNames = studentRecords.map((record) => record.studentName)
-
-        console.log('Extracted student records:', studentRecords.length, studentRecords.slice(0, 5))
-
-        resolve({ studentNames, studentRecords })
+        resolve(rows)
       } catch (error) {
-        reject(new Error(`Failed to parse KPI Sheet: ${error}`))
+        reject(error)
       }
     }
 
-    reader.onerror = () => {
-      reject(new Error('Failed to read KPI Sheet file'))
-    }
+    reader.onerror = () => reject(new Error('Failed to read file'))
 
     reader.readAsBinaryString(file)
   })
 }
 
-export async function parseMembersSheet(file: File): Promise<ParsedMembersSheet> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
+export async function parseKPISheet(
+  file: File,
+): Promise<ParsedKPISheet> {
+  const rows = await readWorksheet(file)
 
-    reader.onload = (event) => {
-      try {
-        const data = event.target?.result
-        const workbook = XLSX.read(data, { type: 'binary' })
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]]
-        const rows = XLSX.utils.sheet_to_json(worksheet)
+  if (rows.length === 0) {
+    return {
+      studentNames: [],
+      studentRecords: [],
+    }
+  }
 
-        if (rows.length === 0) {
-          resolve({ members: [] })
-          return
-        }
+  const firstRow = rows[0]
 
-        const firstRow = rows[0] as Record<string, unknown>
-        console.log('Members Sheet columns found:', Object.keys(firstRow))
+  console.log('KPI Sheet columns found:', Object.keys(firstRow))
 
-        const firstNameKey = findColumnKey(firstRow, ['first name', 'firstname', 'first_name', 'fname', 'forename'])
-        const lastNameKey = findColumnKey(firstRow, ['last name', 'lastname', 'last_name', 'lname', 'surname'])
-        const emailKey = findColumnKey(firstRow, ['email', 'email_id', 'emailid', 'email address', 'e-mail'])
+  const studentNameKey = findColumnKey(firstRow, [
+    'student name',
+    'studentname',
+    'student_name',
+    'name',
+    'student',
+  ])
 
-        const fullNameKey = !firstNameKey && !lastNameKey ? findColumnKey(firstRow, ['name', 'full name', 'fullname', 'member name']) : undefined
+  const phoneNumberKey = findColumnKey(firstRow, [
+    'phone',
+    'phone number',
+    'phone_number',
+    'mobile',
+    'mobile number',
+    'mobile_number',
+    'contact number',
+    'contact_number',
+    'telephone',
+    'telephone number',
+    'cell phone',
+    'phone no',
+    'mobile no',
+  ])
 
-        console.log('Member columns - First:', firstNameKey, 'Last:', lastNameKey, 'Full Name:', fullNameKey, 'Email:', emailKey)
+  const studentRecords: StudentRecord[] = rows
+    .map((row) => {
+      const rawName = studentNameKey
+        ? String(row[studentNameKey] ?? '').trim()
+        : ''
 
-        const members = (rows as Array<Record<string, unknown>>)
-          .map((row) => {
-            let firstName = ''
-            let lastName = ''
+      const studentName = rawName.replace(/\s+/g, ' ')
 
-            if (fullNameKey && !firstNameKey && !lastNameKey) {
-              const fullName = String(row[fullNameKey] || '').trim()
-              const parts = fullName.split(/\s+/)
-              if (parts.length >= 2) {
-                firstName = parts[0]
-                lastName = parts.slice(1).join(' ')
-              } else if (parts.length === 1) {
-                firstName = parts[0]
-                lastName = ''
-              }
-            } else {
-              firstName = firstNameKey ? String(row[firstNameKey] || '').trim() : ''
-              lastName = lastNameKey ? String(row[lastNameKey] || '').trim() : ''
-            }
+      const phoneNumber = phoneNumberKey
+        ? String(row[phoneNumberKey] ?? '').trim()
+        : ''
 
-            const email = emailKey ? String(row[emailKey] || '').trim() : ''
-
-            if (firstName && lastName && email) {
-              return { firstName, lastName, email }
-            } else if (firstName && email) {
-              return { firstName, lastName: '', email }
-            }
-
-            return null
-          })
-          .filter((member) => member !== null) as Array<{ firstName: string; lastName: string; email: string }>
-
-        console.log('Extracted members:', members.length, members.slice(0, 5))
-
-        resolve({ members })
-      } catch (error) {
-        reject(new Error(`Failed to parse Members Sheet: ${error}`))
+      if (!studentName) {
+        return null
       }
-    }
 
-    reader.onerror = () => {
-      reject(new Error('Failed to read Members file'))
-    }
+      return {
+        studentName,
+        phoneNumber,
+      }
+    })
+    .filter(
+      (record): record is StudentRecord =>
+        record !== null,
+    )
 
-    reader.readAsBinaryString(file)
-  })
+  return {
+    studentNames: studentRecords.map(
+      (student) => student.studentName,
+    ),
+    studentRecords,
+  }
+}
+
+export async function parseMembersSheet(
+  file: File,
+): Promise<ParsedMembersSheet> {
+  const rows = await readWorksheet(file)
+
+  if (rows.length === 0) {
+    return {
+      members: [],
+    }
+  }
+
+  const firstRow = rows[0]
+
+  const firstNameKey = findColumnKey(firstRow, [
+    'first name',
+    'firstname',
+    'first_name',
+    'fname',
+  ])
+
+  const lastNameKey = findColumnKey(firstRow, [
+    'last name',
+    'lastname',
+    'last_name',
+    'lname',
+    'surname',
+  ])
+
+  const emailKey = findColumnKey(firstRow, [
+    'email',
+    'email address',
+    'email_id',
+    'e-mail',
+  ])
+
+  const fullNameKey =
+    !firstNameKey && !lastNameKey
+      ? findColumnKey(firstRow, [
+          'name',
+          'full name',
+          'member name',
+        ])
+      : undefined
+
+  const members: Member[] = rows
+    .map((row) => {
+      let firstName = ''
+      let lastName = ''
+
+      if (fullNameKey) {
+        const parts = String(
+          row[fullNameKey] ?? '',
+        )
+          .trim()
+          .split(/\s+/)
+
+        firstName = parts[0] ?? ''
+        lastName = parts.slice(1).join(' ')
+      } else {
+        firstName = firstNameKey
+          ? String(row[firstNameKey] ?? '').trim()
+          : ''
+
+        lastName = lastNameKey
+          ? String(row[lastNameKey] ?? '').trim()
+          : ''
+      }
+
+      const email = emailKey
+        ? String(row[emailKey] ?? '').trim()
+        : ''
+
+      if (!firstName || !email) {
+        return null
+      }
+
+      return {
+        firstName,
+        lastName,
+        email,
+      }
+    })
+    .filter((x): x is Member => x !== null)
+
+  return {
+    members,
+  }
+}
+
+export async function parseMembershipPlanNameSheet(
+  file: File,
+): Promise<ParsedMembershipPlanSheet> {
+  const rows = await readWorksheet(file)
+
+  if (rows.length === 0) {
+    return {
+      lookup: [],
+    }
+  }
+
+  const firstRow = rows[0]
+
+  console.log(
+    'Membership + Plan Name columns:',
+    Object.keys(firstRow),
+  )
+
+  const emailKey = findColumnKey(firstRow, [
+    'email',
+    'email address',
+    'e-mail',
+  ])
+
+  const userIdKey = findColumnKey(firstRow, [
+    'user id',
+    'userid',
+    'user_id',
+    'dimension - user id',
+  ])
+
+  console.log(
+    'Email column:',
+    emailKey,
+    'User Id column:',
+    userIdKey,
+  )
+
+  const lookup: MembershipPlanLookup[] = rows
+    .map((row) => {
+      const email = emailKey
+        ? String(row[emailKey] ?? '').trim()
+        : ''
+
+      const userId = userIdKey
+        ? String(row[userIdKey] ?? '').trim()
+        : ''
+
+      if (!email || !userId) {
+        return null
+      }
+
+      return {
+        email,
+        userId,
+      }
+    })
+    .filter(
+      (row): row is MembershipPlanLookup =>
+        row !== null,
+    )
+
+  console.log(
+    'Parsed Membership + Plan Name:',
+    lookup.length,
+  )
+
+  return {
+    lookup,
+  }
 }
