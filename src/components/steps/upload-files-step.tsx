@@ -15,7 +15,6 @@ import { useAppStore, type UploadItem } from "../../store/app-store";
 import { cn } from "../../lib/utils";
 import {
   parseKPISheet,
-  parseMembersSheet,
   parseMembershipPlanNameSheet,
 } from "../../services/excel-parser";
 
@@ -26,15 +25,12 @@ interface UploadFilesStepProps {
 const uploadDefinitions = [
   { id: "kpi-sheet", title: "KPI Sheet", required: true },
   { id: "uuid", title: "UUID", required: true },
-  { id: "members", title: "Members", required: true },
   {
     id: "membership-plan-name",
     title: "Membership + Plan Name",
     required: true,
   },
-  { id: "membership-lookup", title: "Membership Lookup", required: true },
   { id: "class-booking", title: "Class Booking", required: true },
-  { id: "future-membership", title: "Future Membership", required: false },
 ];
 
 function getValidationMessage(file: File | null): {
@@ -60,9 +56,10 @@ export function UploadFilesStep({ onContinue }: UploadFilesStepProps) {
   const uploads = useAppStore((state) => state.uploads);
   const setUploadState = useAppStore((state) => state.setUploadState);
   const setStudentNames = useAppStore((state) => state.setStudentNames);
-  const setMembershipPlanLookup = useAppStore(state => state.setMembershipPlanLookup);
+  const setMembershipPlanLookup = useAppStore(
+    (state) => state.setMembershipPlanLookup,
+  );
   const setStudentRecords = useAppStore((state) => state.setStudentRecords);
-  const setMembers = useAppStore((state) => state.setMembers);
   const setFileData = useAppStore((state) => state.setFileData);
 
   const requiredUploadsComplete = useMemo(() => {
@@ -109,9 +106,6 @@ export function UploadFilesStep({ onContinue }: UploadFilesStepProps) {
         const parsed = await parseKPISheet(file);
         setStudentNames(parsed.studentNames);
         setStudentRecords(parsed.studentRecords);
-      } else if (uploadId === "members") {
-        const parsed = await parseMembersSheet(file);
-        setMembers(parsed.members);
       } else if (uploadId === "membership-plan-name") {
         const parsed = await parseMembershipPlanNameSheet(file);
         setMembershipPlanLookup(parsed.lookup);
@@ -146,8 +140,8 @@ export function UploadFilesStep({ onContinue }: UploadFilesStepProps) {
     if (uploadId === "kpi-sheet") {
       setStudentNames([]);
       setStudentRecords([]);
-    } else if (uploadId === "members") {
-      setMembers([]);
+    } else if (uploadId === "membership-plan-name") {
+      setMembershipPlanLookup([]);
     }
   };
 

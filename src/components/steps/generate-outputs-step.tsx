@@ -3,6 +3,7 @@ import { ArrowLeft, Files } from "lucide-react";
 
 import { AccountMetadataCard } from "../imports/account-metadata-card";
 import { MembershipCancellationCard } from "../imports/membership-cancellation-card";
+import { MembershipCard } from "../imports/membership-card";
 import { Button } from "../ui/button";
 import { useAppStore } from "../../store/app-store";
 
@@ -38,6 +39,7 @@ export function GenerateOutputsStep() {
 
       <AccountMetadataCard />
       <MembershipCancellationCard />
+      <MembershipCard />
 
       <div>
         <Button

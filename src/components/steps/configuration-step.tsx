@@ -155,6 +155,8 @@ export function ConfigurationStep() {
     studioId = '',
     cycleStartDate,
     nextPaymentDate,
+    deferralDateHeader = 'Deferral Date',
+    membershipPriceHeader = 'Membership price with discount',
     bookStartDateTime,
     bookUntilDateTime,
   } = configurationState
@@ -162,6 +164,8 @@ export function ConfigurationStep() {
     studioId: studioId.trim() ? '' : 'This field is required',
     cycleStartDate: getDateError(cycleStartDate),
     nextPaymentDate: getDateError(nextPaymentDate),
+    deferralDateHeader: deferralDateHeader.trim() ? '' : 'This field is required',
+    membershipPriceHeader: membershipPriceHeader.trim() ? '' : 'This field is required',
     bookStartDate: getDateError(bookStartDateTime),
     bookUntilDate: getDateError(bookUntilDateTime),
   }
@@ -174,6 +178,8 @@ export function ConfigurationStep() {
     studioId: false,
     cycleStartDate: false,
     nextPaymentDate: false,
+    deferralDateHeader: false,
+    membershipPriceHeader: false,
     bookStartDate: false,
     bookUntilDate: false,
   })
@@ -254,6 +260,32 @@ export function ConfigurationStep() {
                 onChange={(value) => setConfigurationState({ nextPaymentDate: value })}
                 onBlur={() => markFieldTouched('nextPaymentDate')}
               />
+              <div className="space-y-2">
+                <label htmlFor="deferral-date-header" className="block text-sm font-semibold text-slate-900 dark:text-white">
+                  Deferral Date Header
+                  <span className="ml-1 text-red-500">*</span>
+                </label>
+                <Input
+                  id="deferral-date-header"
+                  value={deferralDateHeader}
+                  onChange={(event) => setConfigurationState({ deferralDateHeader: event.target.value })}
+                  onBlur={() => markFieldTouched('deferralDateHeader')}
+                  aria-invalid={Boolean(visibleError('deferralDateHeader'))}
+                />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor="membership-price-header" className="block text-sm font-semibold text-slate-900 dark:text-white">
+                  Membership Price Header
+                  <span className="ml-1 text-red-500">*</span>
+                </label>
+                <Input
+                  id="membership-price-header"
+                  value={membershipPriceHeader}
+                  onChange={(event) => setConfigurationState({ membershipPriceHeader: event.target.value })}
+                  onBlur={() => markFieldTouched('membershipPriceHeader')}
+                  aria-invalid={Boolean(visibleError('membershipPriceHeader'))}
+                />
+              </div>
               <DateField
                 id="book-start-date"
                 label="Book Start Date"

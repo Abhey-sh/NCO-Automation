@@ -1,5 +1,5 @@
 import type { StudentRecord } from '../store/app-store'
-import type { Member } from '../services/excel-parser'
+import type { MembershipPlanLookup } from '../services/excel-parser'
 
 export interface ReviewMappingRow {
   studentName: string
@@ -10,14 +10,45 @@ export interface ReviewMappingRow {
   suggestedMember: string
   suggestedEmail: string
   similarity: number
+  matchType: 'exact' | 'manual' | null
   draftQuery: string
   manualAssignmentState: 'idle' | 'ready' | 'assigned'
 }
 
 const normalizeName = (value: string) =>
-  value.trim().replace(/\s+/g, ' ').toLowerCase()
+  value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
 
-const getDisplayName = (member: Member) => `${member.firstName} ${member.lastName}`.trim()
+export function getMembershipFullName(member: MembershipPlanLookup) {
+  const values = Object.entries(member.values ?? {})
+  const normalizeHeader = (header: string) =>
+    header.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const valueFor = (headers: string[]) => {
+    const normalizedHeaders = new Set(headers.map(normalizeHeader))
+    return values.find(([header]) => normalizedHeaders.has(normalizeHeader(header)))?.[1]?.trim() ?? ''
+  }
+
+  const fullName = valueFor([
+    'full name',
+    'dimension - user full name',
+    'user full name',
+    'member full name',
+    'customer name',
+    'name',
+  ])
+  if (fullName) return fullName
+
+  const combinedName = [valueFor(['first name', 'firstname']), valueFor(['last name', 'lastname'])]
+    .filter(Boolean)
+    .join(' ')
+    .trim()
+  return combinedName || member.fullName?.trim() || ''
+}
 
 function calculateSimilarity(valueA: string, valueB: string): number {
   const left = normalizeName(valueA)
@@ -63,14 +94,14 @@ function calculateSimilarity(valueA: string, valueB: string): number {
 
 export function buildReviewMappingRows(
   studentRecords: StudentRecord[],
-  members: Member[],
+  membershipPlanLookup: MembershipPlanLookup[],
 ): ReviewMappingRow[] {
   const results = studentRecords.map((record) => {
     const studentName = record.studentName.trim().replace(/\s+/g, ' ')
     const normalizedStudent = normalizeName(studentName)
 
-    const match = members.find((member) => {
-      const fullMemberName = getDisplayName(member)
+    const match = membershipPlanLookup.find((member) => {
+      const fullMemberName = getMembershipFullName(member)
       const normalizedMember = normalizeName(fullMemberName)
       return normalizedMember === normalizedStudent
     })
@@ -85,12 +116,13 @@ export function buildReviewMappingRows(
         suggestedMember: '',
         suggestedEmail: '',
         similarity: 0,
+        matchType: null,
         draftQuery: '',
         manualAssignmentState: 'idle' as const,
       }
     }
 
-    const displayName = getDisplayName(match)
+    const displayName = getMembershipFullName(match)
 
     return {
       studentName,
@@ -101,6 +133,7 @@ export function buildReviewMappingRows(
       suggestedMember: displayName,
       suggestedEmail: match.email,
       similarity: 100,
+      matchType: 'exact' as const,
       draftQuery: displayName,
       manualAssignmentState: 'assigned' as const,
     }

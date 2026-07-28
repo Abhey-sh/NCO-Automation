@@ -15,6 +15,22 @@ export interface MembershipCancellationRequest {
   membershipLookup: MembershipPlanLookup[];
 }
 
+export interface MembershipKPIRecord {
+  studentName: string;
+  values: Record<string, string>;
+}
+
+export interface MembershipRequest {
+  studioId: string;
+  cycleStartDate: string;
+  nextPaymentDate: string;
+  deferralDateHeader: string;
+  membershipPriceHeader: string;
+  reviewMappings: ReviewedMapping[];
+  membershipPlanLookup: MembershipPlanLookup[];
+  kpiRecords: MembershipKPIRecord[];
+}
+
 export interface AccountMetadataRow {
   userForeignId: string;
   studioForeignId: string;
@@ -24,4 +40,46 @@ export interface AccountMetadataRow {
 export interface MembershipCancellationRow {
   email: string;
   userId: string;
+}
+
+export interface MembershipRow {
+  userForeignId: string;
+  studioForeignId: string;
+  studioId: string;
+  email: string;
+  status: string;
+  userMembershipForeignId: string;
+  membershipPlanForeignId: string;
+  membershipName: string;
+  planName: string;
+  membershipId: string;
+  planCode: string;
+  price: string;
+  paymentMethod: string;
+  localPurchaseDate: string;
+  localCommencedDate: string;
+  localCycleStartDate: string;
+  localNextPaymentDate: string;
+  order: number;
+  localCycleExpiryDate: string;
+  localContractEndDate: string;
+  autoRenewal: string;
+  localPausedFromDate: string;
+  localPausedUntilDate: string;
+  localLockStartDate: string;
+  overdueAmount: string;
+  isRetrying: string;
+}
+
+export interface MembershipSkip {
+  email: string;
+  studentName: string;
+  reason: string;
+}
+
+export interface MembershipResponse {
+  rows: MembershipRow[];
+  generatedCount: number;
+  skippedCount: number;
+  skips: MembershipSkip[];
 }
