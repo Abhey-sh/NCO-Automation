@@ -1,6 +1,6 @@
 # NCO Automation Studio
 
-NCO Automation Studio is a React, Electron, and FastAPI application for preparing membership migration data. It supports source spreadsheet uploads, student-to-member mapping, migration configuration, and Account Metadata CSV generation.
+NCO Automation Studio is a React, Electron, and FastAPI application for preparing membership migration data. It supports source spreadsheet uploads, student-to-member mapping, migration configuration, and CSV generation for Account Metadata, Membership Cancellation, and Membership imports.
 
 ## Technology
 
@@ -19,7 +19,7 @@ No database, authentication service, or `.env` file is required.
 - npm, included with Node.js
 - Python 3.10 or newer
 
-```powershell
+```bash
 node --version
 npm --version
 python --version
@@ -27,19 +27,20 @@ python --version
 
 ## Installation
 
-```powershell
-Set-Location "C:\NCO automatic"
+From the project root:
+
+```bash
 npm install
-python -m pip install -r backend\requirements.txt
+python -m pip install -r backend/requirements.txt
 ```
 
-Replace the path if the project is stored elsewhere.
+On Windows PowerShell, use `backend\requirements.txt` if needed.
 
 ## Run in a browser
 
 Start the frontend and backend together:
 
-```powershell
+```bash
 npm run dev:full
 ```
 
@@ -47,62 +48,89 @@ Open the URL printed by Vite, normally `http://localhost:5173/`. Stop the server
 
 To run the processes separately:
 
-```powershell
+```bash
 npm run dev:backend
 npm run dev
 ```
 
 ## Run with Electron
 
-In PowerShell:
+Start the FastAPI backend in one terminal:
+
+```bash
+npm run dev:backend
+```
+
+In another terminal:
+
+```bash
+NODE_ENV=development npm run dev:electron
+```
+
+On Windows PowerShell:
 
 ```powershell
 $backend = Start-Process powershell -PassThru -ArgumentList "-NoExit", "-Command", "npm run dev:backend"
 $env:NODE_ENV = "development"
 npm run dev:electron
-```
-
-Clear the environment variable afterward:
-
-```powershell
 Remove-Item Env:NODE_ENV
 ```
 
-On macOS or Linux, run `NODE_ENV=development npm run dev:electron`.
-
 ## Application workflow
 
-Step 1 requests:
+### Step 1 — Upload files
+
+Required uploads:
 
 1. KPI Sheet
 2. UUID
-3. Members
-4. Membership + Plan Name
-5. Membership Lookup
-6. Class Booking
-7. Future Membership (optional)
+3. Membership + Plan Name
+4. Class Booking
 
-Only the KPI Sheet and Members spreadsheets are currently parsed. The other files are checked only for a non-empty file and a filename extension.
+Only the KPI Sheet and Membership + Plan Name spreadsheets are currently parsed. UUID and Class Booking are checked only for a non-empty file and a filename extension.
 
-### KPI Sheet format
+#### KPI Sheet format
 
 The first worksheet needs a student-name column. Supported headings include `Student Name`, `StudentName`, `student_name`, `Name`, and `Student`.
 
 A phone column is optional. Supported headings include `Phone`, `Phone Number`, `Mobile`, `Contact Number`, and `Telephone`, including similar underscore or no-space forms.
 
-### Members format
+#### Membership + Plan Name format
 
-The first worksheet must use either separate `First Name` and `Last Name` columns or one `Name`/`Full Name` column. An `Email` column is required for a member row to be imported.
+The first worksheet must include an email column for a row to be imported. Supported headings include `Dimension - User Email` and `email`.
 
-After all required files are accepted, select **Review Mapping**. Exact normalized names are matched automatically. Remaining students can be assigned manually or marked as not found.
+Name is read from headings such as `Full Name`, `Dimension - User Full Name`, `User Full Name`, or `Name`. Additional fields used by import generators include user ID, membership name, plan name, payment method, price, purchased date, and commenced date when those columns are present.
 
-The Configuration step collects the required Studio ID and migration dates. Generate Outputs uses the completed Review Mapping results and Studio ID to generate Account Metadata JSON through FastAPI, preview the first 50 rows, and download `account_metadata.csv`.
+### Step 2 — Review Mapping
+
+After all required files are accepted, select **Review Mapping**. Exact normalized student names are matched automatically against Membership + Plan Name records. Remaining students can be assigned manually or marked as not found.
+
+### Step 3 — Configuration
+
+Collects migration settings used by the generators, including:
+
+- Studio ID
+- Cycle Start Date and Next Payment Date (`DD-MM-YYYY`)
+- Deferral Date and Membership Price KPI headers
+- Book Start Date and Book Until Date
+
+### Step 4 — Generate Outputs
+
+Uses the completed Review Mapping results, Membership + Plan Name lookup, KPI records, and configuration to generate import CSVs through FastAPI:
+
+| Import | Output file | Notes |
+| --- | --- | --- |
+| Account Metadata | `account_metadata.csv` | Requires Studio ID and matched students |
+| Membership Cancellation | `membership_cancellation.csv` | Requires Membership + Plan Name lookup and matched students |
+| Membership | `membership.csv` | Requires Studio ID, cycle/next payment dates, and Membership + Plan Name lookup; reports skipped rows |
+
+Each generator supports preview of the first 50 rows and CSV download.
 
 No example spreadsheets are currently included.
 
 ## Available commands
 
-```powershell
+```bash
 npm run lint
 npm run build
 npm run preview
@@ -110,14 +138,15 @@ npm run dev:backend
 npm run dev:full
 ```
 
-There is currently no automated test suite or `npm test` script.
+Backend unit tests live under `backend/tests/`. There is currently no frontend test suite or `npm test` script.
 
 ## Known limitations
 
 - There is no Electron installer or packaging script.
-- Uploaded files and parsed records do not survive a full page reload.
+- Uploaded files and parsed records do not survive a full page reload (only theme preference is persisted).
 - The FastAPI backend must be running for import generation.
-- XLSX generation and additional import generators are not implemented.
+- XLSX export is not implemented; generated outputs are CSV only.
+- UUID and Class Booking uploads are accepted but not yet used by generators.
 
 ## Project structure
 
@@ -126,9 +155,11 @@ src/
   components/       Wizard steps, import previews, layout, and shared UI
   services/         Excel parsing, mapping, and backend API calls
   store/            Zustand application state
+  types/            Shared import request and response types
 Electron/
   main/             Electron main process
   preload/          Electron preload script
 backend/
   app/              FastAPI routes, schemas, and import services
+  tests/            Backend unit tests
 ```
