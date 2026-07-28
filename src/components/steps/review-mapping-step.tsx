@@ -5,31 +5,30 @@ import { ArrowLeft, CheckCircle2, Phone, Search, Sparkles, UserCheck2, XCircle }
 
 import { Button } from '../ui/button'
 import { Card, CardContent } from '../ui/card'
-import { buildReviewMappingRows, computeSimilarity, type ReviewMappingRow } from '../../services/review-mapping'
+import { buildReviewMappingRows, computeSimilarity, getMembershipFullName, type ReviewMappingRow } from '../../services/review-mapping'
 import { useAppStore } from '../../store/app-store'
-import type { Member } from '../../services/excel-parser'
+import type { MembershipPlanLookup } from '../../services/excel-parser'
 import { cn } from '../../lib/utils'
 
 const filterOptions = ['All', 'Matched', 'Not Matched'] as const
 
 type FilterValue = (typeof filterOptions)[number]
 
-function getSuggestionRank(member: Member, query: string) {
+function getSuggestionRank(member: MembershipPlanLookup, query: string) {
   const normalizedQuery = query.trim().toLowerCase()
-  const fullName = `${member.firstName} ${member.lastName}`.trim().toLowerCase()
-  const firstName = member.firstName.toLowerCase()
-  const lastName = member.lastName.toLowerCase()
+  const fullName = getMembershipFullName(member).toLowerCase()
+  const nameParts = fullName.split(/\s+/)
 
   if (fullName === normalizedQuery) return 0
   if (fullName.startsWith(normalizedQuery)) return 1
-  if (firstName.startsWith(normalizedQuery) || lastName.startsWith(normalizedQuery)) return 2
+  if (nameParts.some((part) => part.startsWith(normalizedQuery))) return 2
   return 3
 }
 
 export function ReviewMappingStep() {
   const studentRecords = useAppStore((state) => state.studentRecords)
   const studentNames = useAppStore((state) => state.studentNames)
-  const members = useAppStore((state) => state.members)
+  const membershipPlanLookup = useAppStore((state) => state.membershipPlanLookup)
   const setCurrentStep = useAppStore((state) => state.setCurrentStep)
   const setMemberNotFound = useAppStore((state) => state.setMemberNotFound)
   const setReviewedMappings = useAppStore((state) => state.setReviewedMappings)
@@ -61,12 +60,20 @@ export function ReviewMappingStep() {
   const setAssignedMapping = useAppStore((state) => state.setAssignedMapping)
 
   useEffect(() => {
-    const computed = buildReviewMappingRows(baseRecords, members)
+    const computed = buildReviewMappingRows(baseRecords, membershipPlanLookup)
 
     // Apply persisted assigned mappings so manual assignments survive reloads
     const mapped = computed.map((r) => {
       const mapping = assignedMappings[r.studentName]
       if (!mapping) return r
+      if (
+        r.matchType === 'exact' &&
+        r.matchedMember === mapping.matchedMember &&
+        r.email === mapping.email
+      ) {
+        setAssignedMapping(r.studentName, null)
+        return r
+      }
 
       return {
         ...r,
@@ -76,13 +83,14 @@ export function ReviewMappingStep() {
         suggestedMember: mapping.matchedMember,
         suggestedEmail: mapping.email,
         similarity: 100,
+        matchType: 'manual' as const,
         manualAssignmentState: 'assigned' as const,
         draftQuery: mapping.matchedMember,
       }
     })
 
     setRows(mapped)
-  }, [baseRecords, members, assignedMappings, setAssignedMapping])
+  }, [baseRecords, membershipPlanLookup, assignedMappings, setAssignedMapping])
 
   const visibleRows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -119,12 +127,16 @@ export function ReviewMappingStep() {
       const containerRect = tableContainer.getBoundingClientRect()
       const inputRect = inputContainer.getBoundingClientRect()
       const spacing = 8
-      const visibleTop = Math.max(containerRect.top, spacing)
-      const visibleBottom = Math.min(containerRect.bottom, window.innerHeight - spacing)
+      const visibleTop = spacing
+      const visibleBottom = window.innerHeight - spacing
       const availableBelow = Math.max(0, visibleBottom - inputRect.bottom - spacing)
       const availableAbove = Math.max(0, inputRect.top - visibleTop - spacing)
       const naturalHeight = dropdown.scrollHeight
-      const direction = availableBelow >= naturalHeight ? 'down' : 'up'
+      const fiveSuggestionHeight = Math.min(naturalHeight, 5 * 58)
+      const direction =
+        availableBelow >= fiveSuggestionHeight || availableBelow >= availableAbove
+          ? 'down'
+          : 'up'
       const availableHeight = direction === 'down' ? availableBelow : availableAbove
       const maxHeight = Math.min(naturalHeight, availableHeight)
       const width = Math.min(380, containerRect.width - 24, window.innerWidth - 24)
@@ -146,18 +158,19 @@ export function ReviewMappingStep() {
       window.removeEventListener('resize', updatePlacement)
       window.removeEventListener('scroll', updatePlacement, true)
     }
-  }, [activeStudent, filter, members, rows])
+  }, [activeStudent, filter, membershipPlanLookup, rows])
 
   const handleDraftChange = (studentName: string, value: string) => {
     setRows((currentRows) =>
       currentRows.map((row) =>
-        row.studentName === studentName
+        row.studentName === studentName && !row.matched
           ? {
               ...row,
               draftQuery: value,
               suggestedMember: '',
               suggestedEmail: '',
               similarity: 0,
+              matchType: null,
               manualAssignmentState: 'idle',
             }
           : row,
@@ -165,12 +178,12 @@ export function ReviewMappingStep() {
     )
   }
 
-  const handleSuggestionSelect = (studentName: string, member: Member) => {
-    const displayName = `${member.firstName} ${member.lastName}`.trim()
+  const handleSuggestionSelect = (studentName: string, member: MembershipPlanLookup) => {
+    const displayName = getMembershipFullName(member)
 
     setRows((currentRows) =>
       currentRows.map((row) =>
-        row.studentName === studentName
+        row.studentName === studentName && !row.matched
           ? {
               ...row,
               suggestedMember: displayName,
@@ -185,29 +198,48 @@ export function ReviewMappingStep() {
     setActiveStudent(null)
   }
 
-  const getRowSuggestions = (draftQuery: string) =>
-    draftQuery.trim().length > 0
-      ? members
-          .filter((member) => {
-            const fullName = `${member.firstName} ${member.lastName}`.trim().toLowerCase()
-            return fullName.includes(draftQuery.trim().toLowerCase())
-          })
-          .sort((left, right) => getSuggestionRank(left, draftQuery) - getSuggestionRank(right, draftQuery))
-      : []
+  const getRowSuggestions = (draftQuery: string) => {
+    const normalizedQuery = draftQuery.trim().toLowerCase()
+    if (!normalizedQuery) return []
+
+    const seen = new Set<string>()
+    return membershipPlanLookup
+      .filter((member) => {
+        const fullName = getMembershipFullName(member)
+        const suggestionKey = `${fullName.toLowerCase()}|${member.email.toLowerCase()}`
+        if (!fullName || !member.email || seen.has(suggestionKey)) return false
+
+        const similarity = computeSimilarity(draftQuery, fullName)
+        const isTextMatch = fullName.toLowerCase().includes(normalizedQuery)
+        if (!isTextMatch && similarity < 50) return false
+
+        seen.add(suggestionKey)
+        return true
+      })
+      .sort((left, right) => {
+        const rankDifference =
+          getSuggestionRank(left, draftQuery) -
+          getSuggestionRank(right, draftQuery)
+        if (rankDifference !== 0) return rankDifference
+
+        return (
+          computeSimilarity(draftQuery, getMembershipFullName(right)) -
+          computeSimilarity(draftQuery, getMembershipFullName(left))
+        )
+      })
+      .slice(0, 10)
+  }
 
   const handleAssignAll = () => {
     const updatedRows: ReviewMappingRow[] = rows.map((row) => {
-      if (row.matched) return row
+      if (row.matched || row.matchType === 'exact') return row
 
-      const suggestions = getRowSuggestions(row.draftQuery)
-      const candidate = row.suggestedMember
-        ? { matchedMember: row.suggestedMember, email: row.suggestedEmail }
-        : suggestions.length > 0
-        ? {
-            matchedMember: `${suggestions[0].firstName} ${suggestions[0].lastName}`.trim(),
-            email: suggestions[0].email,
-          }
-        : null
+      const candidate =
+        row.manualAssignmentState === 'ready' &&
+        row.suggestedMember &&
+        row.suggestedEmail
+          ? { matchedMember: row.suggestedMember, email: row.suggestedEmail }
+          : null
 
       if (!candidate) return row
 
@@ -218,12 +250,13 @@ export function ReviewMappingStep() {
         email: candidate.email,
         suggestedMember: row.suggestedMember || candidate.matchedMember,
         suggestedEmail: row.suggestedEmail || candidate.email,
+        matchType: 'manual',
         manualAssignmentState: 'assigned',
       } as ReviewMappingRow
     })
 
     updatedRows.forEach((row) => {
-      if (row.matched && row.manualAssignmentState === 'assigned') {
+      if (row.matched && row.matchType === 'manual') {
         setAssignedMapping(row.studentName, { matchedMember: row.matchedMember, email: row.email })
       }
     })
@@ -232,7 +265,7 @@ export function ReviewMappingStep() {
     setActiveStudent(null)
   }
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>, studentName: string, suggestions: Member[]) => {
+  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>, studentName: string, suggestions: MembershipPlanLookup[]) => {
     if (!suggestions.length) return
 
     if (event.key === 'Enter') {
@@ -249,7 +282,7 @@ export function ReviewMappingStep() {
         studentName: row.studentName,
         matchedMember: row.matchedMember,
         email: row.email,
-        matchType: assignedMappings[row.studentName] ? 'manual' as const : 'exact' as const,
+        matchType: row.matchType ?? 'exact',
       }))
 
     setMemberNotFound(notMatched)
@@ -320,13 +353,24 @@ export function ReviewMappingStep() {
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Search students, members, phones"
+                  placeholder="Search students, membership records, phones"
                   className="w-full rounded-full border border-slate-200 bg-white py-2.5 pl-9 pr-4 text-sm text-slate-700 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
                 />
               </div>
               <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
                 {filter === 'Not Matched' ? (
-                  <Button size="sm" className="min-w-[170px]" onClick={handleAssignAll} disabled={!rows.some((row) => !row.matched && (row.suggestedMember || getRowSuggestions(row.draftQuery).length > 0))}>
+                  <Button
+                    size="sm"
+                    className="min-w-[170px]"
+                    onClick={handleAssignAll}
+                    disabled={!rows.some(
+                      (row) =>
+                        !row.matched &&
+                        row.manualAssignmentState === 'ready' &&
+                        row.suggestedMember &&
+                        row.suggestedEmail,
+                    )}
+                  >
                     Assign suggestions
                   </Button>
                 ) : (
@@ -366,27 +410,20 @@ export function ReviewMappingStep() {
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-800 dark:bg-slate-950/70">
                   {visibleRows.map((row, index) => {
-                    const suggestions = row.draftQuery.trim().length > 0
-                      ? members
-                          .filter((member) => {
-                            const fullName = `${member.firstName} ${member.lastName}`.trim().toLowerCase()
-                            return fullName.includes(row.draftQuery.trim().toLowerCase())
-                          })
-                          .sort((left, right) => getSuggestionRank(left, row.draftQuery) - getSuggestionRank(right, row.draftQuery))
-                      : []
+                    const suggestions = getRowSuggestions(row.draftQuery)
                     const showSuggestionsAbove = index >= visibleRows.length - 3
                     const suggestionOptions = suggestions.map((member) => {
-                      const suggestionLabel = `${member.firstName} ${member.lastName}`.trim()
+                      const suggestionLabel = getMembershipFullName(member)
                       const suggestionKey = `${suggestionLabel}-${member.email}`
                       return (
                         <li
                           key={suggestionKey}
                           onMouseDown={(event) => event.preventDefault()}
                           onClick={() => handleSuggestionSelect(row.studentName, member)}
-                          className="cursor-pointer border-b border-slate-100 px-3 py-2 transition hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900"
+                          className="min-h-[58px] cursor-pointer border-b border-slate-100 px-3 py-2 transition hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-900"
                         >
                           <div className="font-medium text-slate-800 dark:text-slate-100">{suggestionLabel}</div>
-                          <div className="mt-0.5 break-all text-xs text-slate-500 dark:text-slate-400">{member.email}</div>
+                          <div className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400" title={member.email}>{member.email}</div>
                         </li>
                       )
                     })
@@ -400,7 +437,11 @@ export function ReviewMappingStep() {
                           <div className="flex items-center gap-2 text-[13px] font-medium text-slate-700 dark:text-slate-200">
                             {row.matched ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <XCircle className="h-4 w-4 text-rose-500" />}
                             <span>
-                              {row.matched ? 'Matched' : row.manualAssignmentState === 'ready' ? 'Ready to assign' : 'Not matched'}
+                              {row.matched
+                                ? 'Matched'
+                                : row.manualAssignmentState === 'ready' && row.suggestedEmail
+                                  ? 'Ready to assign'
+                                  : 'Not matched'}
                             </span>
                           </div>
                         </td>
@@ -476,6 +517,10 @@ export function ReviewMappingStep() {
                               <UserCheck2 className="h-4 w-4" />
                               <span className="text-sm font-semibold">Assigned</span>
                             </div>
+                          ) : row.manualAssignmentState === 'ready' && row.suggestedEmail ? (
+                            <span className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+                              Ready to assign
+                            </span>
                           ) : (
                             <span className="text-sm text-slate-500 dark:text-slate-400">Pending</span>
                           )}

@@ -1,329 +1,333 @@
-import * as XLSX from 'xlsx'
+import * as XLSX from "xlsx";
 
-import type { StudentRecord } from '../store/app-store'
-
-export interface Member {
-  firstName: string
-  lastName: string
-  email: string
-}
+import type { StudentRecord } from "../store/app-store";
 
 export interface MembershipPlanLookup {
-  email: string
-  userId: string
-}
-
-export interface MembershipLookupRow {
-  membershipId: string
-  membershipName: string
+  fullName: string;
+  email: string;
+  userId: string;
+  membershipName: string;
+  planName: string;
+  paymentMethod: string;
+  price: string;
+  purchasedDate: string;
+  commencedDate: string;
+  values: Record<string, string>;
 }
 
 export interface UUIDRow {
-  uuid: string
+  uuid: string;
 }
 
 export interface ClassBookingRow {
-  bookingId: string
-}
-
-export interface FutureMembershipRow {
-  membershipName: string
+  bookingId: string;
 }
 
 export interface ParsedKPISheet {
-  studentNames: string[]
-  studentRecords: StudentRecord[]
-}
-
-export interface ParsedMembersSheet {
-  members: Member[]
+  studentNames: string[];
+  studentRecords: StudentRecord[];
 }
 
 export interface ParsedMembershipPlanSheet {
-  lookup: MembershipPlanLookup[]
+  lookup: MembershipPlanLookup[];
 }
 
-function findColumnKey(row: Record<string, unknown>, keywords: string[]): string | undefined {
+function findColumnKey(
+  row: Record<string, unknown>,
+  keywords: string[],
+): string | undefined {
   const normalizedRow = Object.keys(row).map((key) => ({
     original: key,
     normalized: key.toLowerCase().trim(),
-  }))
+  }));
 
   for (const keyword of keywords) {
-    const normalized = keyword.toLowerCase().trim()
-    const match = normalizedRow.find((k) =>
-      k.normalized === normalized || k.normalized.includes(normalized) || normalized.includes(k.normalized),
-    )
-    if (match) return match.original
+    const normalized = keyword.toLowerCase().trim();
+    const match = normalizedRow.find(
+      (k) =>
+        k.normalized === normalized ||
+        k.normalized.includes(normalized) ||
+        normalized.includes(k.normalized),
+    );
+    if (match) return match.original;
   }
 
-  return undefined
+  return undefined;
+}
+
+function findPreferredColumnKey(
+  row: Record<string, unknown>,
+  headers: string[],
+  legacyKeywords: string[] = [],
+): string | undefined {
+  const keys = Object.keys(row);
+  const normalizeHeader = (value: string) =>
+    value.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  for (const header of headers) {
+    const normalizedHeader = header.toLowerCase().trim();
+    const match = keys.find(
+      (key) => key.toLowerCase().trim() === normalizedHeader,
+    );
+    if (match) return match;
+
+    const normalizedCompactHeader = normalizeHeader(header);
+    const compactMatch = keys.find(
+      (key) => normalizeHeader(key) === normalizedCompactHeader,
+    );
+    if (compactMatch) return compactMatch;
+  }
+
+  return legacyKeywords.length > 0
+    ? findColumnKey(row, legacyKeywords)
+    : undefined;
 }
 
 async function readWorksheet(
   file: File,
 ): Promise<Array<Record<string, unknown>>> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader()
+    const reader = new FileReader();
 
     reader.onload = (event) => {
       try {
-        const data = event.target?.result
+        const data = event.target?.result;
 
         const workbook = XLSX.read(data, {
-          type: 'binary',
-        })
+          type: "binary",
+        });
 
-        const worksheet =
-          workbook.Sheets[workbook.SheetNames[0]]
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
 
-        const rows = XLSX.utils.sheet_to_json(
-          worksheet,
-        ) as Array<Record<string, unknown>>
+        const rows = XLSX.utils.sheet_to_json(worksheet) as Array<
+          Record<string, unknown>
+        >;
 
-        resolve(rows)
+        resolve(rows);
       } catch (error) {
-        reject(error)
+        reject(error);
       }
-    }
+    };
 
-    reader.onerror = () => reject(new Error('Failed to read file'))
+    reader.onerror = () => reject(new Error("Failed to read file"));
 
-    reader.readAsBinaryString(file)
-  })
+    reader.readAsBinaryString(file);
+  });
 }
 
-export async function parseKPISheet(
-  file: File,
-): Promise<ParsedKPISheet> {
-  const rows = await readWorksheet(file)
+export async function parseKPISheet(file: File): Promise<ParsedKPISheet> {
+  const rows = await readWorksheet(file);
 
   if (rows.length === 0) {
     return {
       studentNames: [],
       studentRecords: [],
-    }
+    };
   }
 
-  const firstRow = rows[0]
+  const firstRow = rows[0];
 
-  console.log('KPI Sheet columns found:', Object.keys(firstRow))
+  console.log("KPI Sheet columns found:", Object.keys(firstRow));
 
   const studentNameKey = findColumnKey(firstRow, [
-    'student name',
-    'studentname',
-    'student_name',
-    'name',
-    'student',
-  ])
+    "student name",
+    "studentname",
+    "student_name",
+    "name",
+    "student",
+  ]);
 
   const phoneNumberKey = findColumnKey(firstRow, [
-    'phone',
-    'phone number',
-    'phone_number',
-    'mobile',
-    'mobile number',
-    'mobile_number',
-    'contact number',
-    'contact_number',
-    'telephone',
-    'telephone number',
-    'cell phone',
-    'phone no',
-    'mobile no',
-  ])
+    "phone",
+    "phone number",
+    "phone_number",
+    "mobile",
+    "mobile number",
+    "mobile_number",
+    "contact number",
+    "contact_number",
+    "telephone",
+    "telephone number",
+    "cell phone",
+    "phone no",
+    "mobile no",
+  ]);
 
   const studentRecords: StudentRecord[] = rows
-    .map((row) => {
+    .map<StudentRecord | null>((row) => {
       const rawName = studentNameKey
-        ? String(row[studentNameKey] ?? '').trim()
-        : ''
+        ? String(row[studentNameKey] ?? "").trim()
+        : "";
 
-      const studentName = rawName.replace(/\s+/g, ' ')
+      const studentName = rawName.replace(/\s+/g, " ");
 
       const phoneNumber = phoneNumberKey
-        ? String(row[phoneNumberKey] ?? '').trim()
-        : ''
+        ? String(row[phoneNumberKey] ?? "").trim()
+        : "";
 
       if (!studentName) {
-        return null
+        return null;
       }
 
       return {
         studentName,
         phoneNumber,
-      }
+        values: Object.fromEntries(
+          Object.entries(row).map(([header, value]) => [
+            header,
+            String(value ?? "").trim(),
+          ]),
+        ),
+      };
     })
-    .filter(
-      (record): record is StudentRecord =>
-        record !== null,
-    )
+    .filter((record): record is StudentRecord => record !== null);
 
   return {
-    studentNames: studentRecords.map(
-      (student) => student.studentName,
-    ),
+    studentNames: studentRecords.map((student) => student.studentName),
     studentRecords,
-  }
-}
-
-export async function parseMembersSheet(
-  file: File,
-): Promise<ParsedMembersSheet> {
-  const rows = await readWorksheet(file)
-
-  if (rows.length === 0) {
-    return {
-      members: [],
-    }
-  }
-
-  const firstRow = rows[0]
-
-  const firstNameKey = findColumnKey(firstRow, [
-    'first name',
-    'firstname',
-    'first_name',
-    'fname',
-  ])
-
-  const lastNameKey = findColumnKey(firstRow, [
-    'last name',
-    'lastname',
-    'last_name',
-    'lname',
-    'surname',
-  ])
-
-  const emailKey = findColumnKey(firstRow, [
-    'email',
-    'email address',
-    'email_id',
-    'e-mail',
-  ])
-
-  const fullNameKey =
-    !firstNameKey && !lastNameKey
-      ? findColumnKey(firstRow, [
-          'name',
-          'full name',
-          'member name',
-        ])
-      : undefined
-
-  const members: Member[] = rows
-    .map((row) => {
-      let firstName = ''
-      let lastName = ''
-
-      if (fullNameKey) {
-        const parts = String(
-          row[fullNameKey] ?? '',
-        )
-          .trim()
-          .split(/\s+/)
-
-        firstName = parts[0] ?? ''
-        lastName = parts.slice(1).join(' ')
-      } else {
-        firstName = firstNameKey
-          ? String(row[firstNameKey] ?? '').trim()
-          : ''
-
-        lastName = lastNameKey
-          ? String(row[lastNameKey] ?? '').trim()
-          : ''
-      }
-
-      const email = emailKey
-        ? String(row[emailKey] ?? '').trim()
-        : ''
-
-      if (!firstName || !email) {
-        return null
-      }
-
-      return {
-        firstName,
-        lastName,
-        email,
-      }
-    })
-    .filter((x): x is Member => x !== null)
-
-  return {
-    members,
-  }
+  };
 }
 
 export async function parseMembershipPlanNameSheet(
   file: File,
 ): Promise<ParsedMembershipPlanSheet> {
-  const rows = await readWorksheet(file)
+  const rows = await readWorksheet(file);
 
   if (rows.length === 0) {
     return {
       lookup: [],
-    }
+    };
   }
 
-  const firstRow = rows[0]
+  const firstRow = rows[0];
 
-  console.log(
-    'Membership + Plan Name columns:',
-    Object.keys(firstRow),
-  )
+  console.log("Membership + Plan Name columns:", Object.keys(firstRow));
 
-  const emailKey = findColumnKey(firstRow, [
-    'email',
-    'email address',
-    'e-mail',
-  ])
+  const fullNameKey = findPreferredColumnKey(
+    firstRow,
+    ["Full Name", "Dimension - User Full Name", "User Full Name", "Name"],
+    ["member full name", "customer name"],
+  );
+
+  const emailKey = findPreferredColumnKey(
+    firstRow,
+    ["Dimension - User Email", "email"],
+    ["email address", "e-mail"],
+  );
 
   const userIdKey = findColumnKey(firstRow, [
-    'user id',
-    'userid',
-    'user_id',
-    'dimension - user id',
-  ])
+    "user id",
+    "userid",
+    "user_id",
+    "dimension - user id",
+  ]);
 
-  console.log(
-    'Email column:',
+  const membershipNameKey = findPreferredColumnKey(firstRow, [
+    "Dimension - User Current Membership Name",
+    "membership name",
+  ]);
+
+  const planNameKey = findPreferredColumnKey(firstRow, [
+    "Dimension - User Current Membership Plan Name",
+    "plan name",
+  ]);
+
+  const paymentMethodKey = findPreferredColumnKey(firstRow, [
+    "Flt Total Memberships Payment Method",
+    "payment method",
+  ]);
+
+  const priceKey = findPreferredColumnKey(
+    firstRow,
+    ["Flt Total Memberships Price Paid", "price"],
+    ["price paid", "membership price"],
+  );
+
+  const purchasedDateKey = findPreferredColumnKey(
+    firstRow,
+    ["Flt Total Memberships Purchased Date", "purchase date"],
+    ["purchased date"],
+  );
+
+  const commencedDateKey = findPreferredColumnKey(firstRow, [
+    "Flt Total Memberships Commenced Date",
+    "commenced date",
+  ]);
+
+  console.log({
+    fullNameKey,
     emailKey,
-    'User Id column:',
     userIdKey,
-  )
+    membershipNameKey,
+    planNameKey,
+    paymentMethodKey,
+    priceKey,
+    purchasedDateKey,
+    commencedDateKey,
+  });
 
   const lookup: MembershipPlanLookup[] = rows
     .map((row) => {
-      const email = emailKey
-        ? String(row[emailKey] ?? '').trim()
-        : ''
+      const fullName = fullNameKey
+        ? String(row[fullNameKey] ?? "").trim().replace(/\s+/g, " ")
+        : "";
+      const email = emailKey ? String(row[emailKey] ?? "").trim() : "";
 
-      const userId = userIdKey
-        ? String(row[userIdKey] ?? '').trim()
-        : ''
+      const userId = userIdKey ? String(row[userIdKey] ?? "").trim() : "";
 
-      if (!email || !userId) {
-        return null
+      const membershipName = membershipNameKey
+        ? String(row[membershipNameKey] ?? "").trim()
+        : "";
+
+      const planName = planNameKey
+        ? String(row[planNameKey] ?? "").trim()
+        : "";
+
+      const paymentMethod = paymentMethodKey
+        ? String(row[paymentMethodKey] ?? "").trim()
+        : "";
+
+      const price = priceKey
+        ? String(row[priceKey] ?? "").trim()
+        : "";
+
+      const purchasedDate = purchasedDateKey
+        ? String(row[purchasedDateKey] ?? "").trim()
+        : "";
+
+      const commencedDate = commencedDateKey
+        ? String(row[commencedDateKey] ?? "").trim()
+        : "";
+
+      if (!email) {
+        return null;
       }
 
       return {
+        fullName,
         email,
         userId,
-      }
+        membershipName,
+        planName,
+        paymentMethod,
+        price,
+        purchasedDate,
+        commencedDate,
+        values: Object.fromEntries(
+          Object.entries(row).map(([header, value]) => [
+            header,
+            String(value ?? "").trim(),
+          ]),
+        ),
+      };
     })
     .filter(
-      (row): row is MembershipPlanLookup =>
-        row !== null,
-    )
+      (row): row is MembershipPlanLookup => row !== null,
+    );
 
-  console.log(
-    'Parsed Membership + Plan Name:',
-    lookup.length,
-  )
+  console.log("Parsed Membership + Plan Name:", lookup.length);
 
   return {
     lookup,
-  }
+  };
 }

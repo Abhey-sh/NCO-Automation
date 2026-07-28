@@ -3,6 +3,8 @@ import type {
   AccountMetadataRow,
   MembershipCancellationRequest,
   MembershipCancellationRow,
+  MembershipRequest,
+  MembershipResponse,
 } from "../types/imports";
 
 const defaultApiBaseUrl =
@@ -44,6 +46,13 @@ export function generateMembershipCancellation(
 ) {
   return postImport<MembershipCancellationRequest, MembershipCancellationRow[]>(
     "/imports/membership-cancellation",
+    payload,
+  );
+}
+
+export function generateMemberships(payload: MembershipRequest) {
+  return postImport<MembershipRequest, MembershipResponse>(
+    "/imports/memberships",
     payload,
   );
 }

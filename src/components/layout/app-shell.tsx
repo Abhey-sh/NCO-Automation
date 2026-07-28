@@ -114,7 +114,6 @@ export function AppShell() {
             </div>
 
             <div className="relative space-y-3">
-              <div className="absolute left-[19px] top-2 h-[calc(100%-16px)] w-px bg-slate-200 dark:bg-slate-700" />
               {steps.map((step) => {
                 const state = getStepState(step.id)
                 const isClickable = state === 'completed' || state === 'active'

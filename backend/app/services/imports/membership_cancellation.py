@@ -17,9 +17,9 @@ def generate_membership_cancellation(
     """
 
     lookup = {
-        item.email.strip().lower(): item.userId
+        item.email.strip().lower(): item.user_id
         for item in membership_lookup
-        if item.email and item.userId
+        if item.email and item.user_id
     }
 
     rows: list[MembershipCancellationRow] = []

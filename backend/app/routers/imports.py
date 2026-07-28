@@ -5,12 +5,15 @@ from app.schemas.imports import (
     AccountMetadataRow,
     MembershipCancellationRequest,
     MembershipCancellationRow,
+    MembershipRequest,
+    MembershipResponse,
 )
 
 from app.services.imports.account_metadata import generate_account_metadata
 from app.services.imports.membership_cancellation import (
     generate_membership_cancellation,
 )
+from app.services.imports.memberships import generate_memberships
 
 router = APIRouter(prefix="/imports", tags=["imports"])
 
@@ -54,3 +57,14 @@ def create_membership_cancellation_import(
         )
 
     return rows
+
+
+@router.post("/memberships", response_model=MembershipResponse)
+def create_memberships_import(request: MembershipRequest) -> MembershipResponse:
+    if not request.studio_id.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Studio ID is required before generating Membership Import.",
+        )
+
+    return generate_memberships(request)

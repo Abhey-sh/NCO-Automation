@@ -4,10 +4,11 @@ import { persist } from "zustand/middleware";
 import type {
   AccountMetadataRow,
   MembershipCancellationRow,
+  MembershipRow,
   ReviewedMapping,
 } from "../types/imports";
 
-import type { Member, MembershipPlanLookup } from "../services/excel-parser";
+import type { MembershipPlanLookup } from "../services/excel-parser";
 
 export type ThemeMode = "light" | "dark";
 export type UploadStatus = "idle" | "uploading" | "valid" | "invalid";
@@ -23,11 +24,10 @@ export interface UploadItem {
   fileData?: File;
 }
 
-
-
 export interface StudentRecord {
   studentName: string;
   phoneNumber: string;
+  values?: Record<string, string>;
 }
 
 interface AppState {
@@ -36,17 +36,19 @@ interface AppState {
   uploads: UploadItem[];
   studentNames: string[];
   studentRecords: StudentRecord[];
-  members: Member[];
   membershipPlanLookup: MembershipPlanLookup[];
   assignedMappings: Record<string, { matchedMember: string; email: string }>;
   memberNotFound: StudentRecord[];
   reviewedMappings: ReviewedMapping[];
   accountMetadataRows: AccountMetadataRow[];
   membershipCancellationRows: MembershipCancellationRow[];
+  membershipRows: MembershipRow[];
   configurationState: {
     studioId: string;
     cycleStartDate: string;
     nextPaymentDate: string;
+    deferralDateHeader: string;
+    membershipPriceHeader: string;
     bookStartDateTime: string;
     bookUntilDateTime: string;
   };
@@ -57,7 +59,6 @@ interface AppState {
   setFileData: (fileId: string, data: File) => void;
   setStudentNames: (names: string[]) => void;
   setStudentRecords: (records: StudentRecord[]) => void;
-  setMembers: (members: Member[]) => void;
   setAssignedMapping: (
     studentName: string,
     mapping: { matchedMember: string; email: string } | null,
@@ -66,8 +67,8 @@ interface AppState {
   setReviewedMappings: (mappings: ReviewedMapping[]) => void;
   setAccountMetadataRows: (rows: AccountMetadataRow[]) => void;
   setMembershipPlanLookup(lookup: MembershipPlanLookup[]): void;
-
   setMembershipCancellationRows: (rows: MembershipCancellationRow[]) => void;
+  setMembershipRows: (rows: MembershipRow[]) => void;
   setConfigurationState: (
     config: Partial<AppState["configurationState"]>,
   ) => void;
@@ -94,26 +95,8 @@ const initialUploads: UploadItem[] = [
     message: "Awaiting upload",
   },
   {
-    id: "members",
-    title: "Members",
-    required: true,
-    status: "idle",
-    progress: 0,
-    filename: "",
-    message: "Awaiting upload",
-  },
-  {
     id: "membership-plan-name",
     title: "Membership + Plan Name",
-    required: true,
-    status: "idle",
-    progress: 0,
-    filename: "",
-    message: "Awaiting upload",
-  },
-  {
-    id: "membership-lookup",
-    title: "Membership Lookup",
     required: true,
     status: "idle",
     progress: 0,
@@ -129,15 +112,6 @@ const initialUploads: UploadItem[] = [
     filename: "",
     message: "Awaiting upload",
   },
-  {
-    id: "future-membership",
-    title: "Future Membership",
-    required: false,
-    status: "idle",
-    progress: 0,
-    filename: "",
-    message: "Optional file",
-  },
 ];
 
 export const useAppStore = create<AppState>()(
@@ -148,17 +122,19 @@ export const useAppStore = create<AppState>()(
       uploads: initialUploads,
       studentNames: [],
       studentRecords: [],
-      members: [],
       membershipPlanLookup: [],
       assignedMappings: {},
       memberNotFound: [],
       reviewedMappings: [],
       accountMetadataRows: [],
       membershipCancellationRows: [],
+      membershipRows: [],
       configurationState: {
         studioId: "",
         cycleStartDate: "",
         nextPaymentDate: "",
+        deferralDateHeader: "Deferral Date",
+        membershipPriceHeader: "Membership price with discount",
         bookStartDateTime: "",
         bookUntilDateTime: "",
       },
@@ -186,6 +162,7 @@ export const useAppStore = create<AppState>()(
           studentRecords: names.map((studentName) => ({
             studentName,
             phoneNumber: "",
+            values: {},
           })),
         }),
       setStudentRecords: (records) =>
@@ -193,7 +170,6 @@ export const useAppStore = create<AppState>()(
           studentRecords: records,
           studentNames: records.map((record) => record.studentName),
         }),
-      setMembers: (members) => set({ members }),
       setMembershipPlanLookup: (lookup) =>
         set({
           membershipPlanLookup: lookup,
@@ -217,6 +193,7 @@ export const useAppStore = create<AppState>()(
       setAccountMetadataRows: (rows) => set({ accountMetadataRows: rows }),
       setMembershipCancellationRows: (rows) =>
         set({ membershipCancellationRows: rows }),
+      setMembershipRows: (rows) => set({ membershipRows: rows }),
       setConfigurationState: (config) =>
         set((state) => ({
           configurationState: { ...state.configurationState, ...config },
@@ -227,25 +204,12 @@ export const useAppStore = create<AppState>()(
       name: "nco-automation-studio",
       partialize: (state) => ({
         theme: state.theme,
-        currentStep: state.currentStep,
-        uploads: state.uploads,
-        assignedMappings: state.assignedMappings,
-        memberNotFound: state.memberNotFound,
-        reviewedMappings: state.reviewedMappings,
-        accountMetadataRows: state.accountMetadataRows,
-        membershipCancellationRows: state.membershipCancellationRows,
-        membershipPlanLookup: state.membershipPlanLookup,
-        configurationState: state.configurationState,
       }),
       merge: (persistedState, currentState) => {
         const persisted = persistedState as Partial<AppState>;
         return {
           ...currentState,
-          ...persisted,
-          configurationState: {
-            ...currentState.configurationState,
-            ...persisted.configurationState,
-          },
+          theme: persisted.theme ?? currentState.theme,
         };
       },
     },
