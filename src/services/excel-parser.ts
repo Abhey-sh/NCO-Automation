@@ -16,11 +16,16 @@ export interface MembershipPlanLookup {
 }
 
 export interface UUIDRow {
-  uuid: string;
+  email: string;
+  userId: string;
+  values: Record<string, string>;
 }
 
 export interface ClassBookingRow {
-  bookingId: string;
+  userId: string;
+  programId: string;
+  scheduleCode: string;
+  values: Record<string, string>;
 }
 
 export interface ParsedKPISheet {
@@ -30,6 +35,14 @@ export interface ParsedKPISheet {
 
 export interface ParsedMembershipPlanSheet {
   lookup: MembershipPlanLookup[];
+}
+
+export interface ParsedUUIDSheet {
+  lookup: UUIDRow[];
+}
+
+export interface ParsedClassBookingSheet {
+  lookup: ClassBookingRow[];
 }
 
 function findColumnKey(
@@ -326,6 +339,164 @@ export async function parseMembershipPlanNameSheet(
     );
 
   console.log("Parsed Membership + Plan Name:", lookup.length);
+
+  return {
+    lookup,
+  };
+}
+
+export async function parseUUIDSheet(file: File): Promise<ParsedUUIDSheet> {
+  const rows = await readWorksheet(file);
+
+  if (rows.length === 0) {
+    return {
+      lookup: [],
+    };
+  }
+
+  const firstRow = rows[0];
+
+  console.log("UUID columns:", Object.keys(firstRow));
+
+  const emailKey = findPreferredColumnKey(
+    firstRow,
+    ["Email", "Dimension - User Email", "User Email"],
+    ["email address", "e-mail"],
+  );
+  const userIdKey = findPreferredColumnKey(
+    firstRow,
+    [
+      "User ID",
+      "Dimension - User ID",
+      "Dimension - User Id",
+      "UUID",
+      "User UUID",
+      "Glofox User ID",
+      "Member ID",
+      "Customer ID",
+    ],
+    ["userid", "user_id", "glofox user id", "glofox id"],
+  );
+
+  if (!emailKey || !userIdKey) {
+    throw new Error("UUID file must include Email and User ID columns.");
+  }
+
+  const lookup = rows
+    .map<UUIDRow | null>((row) => {
+      const email = emailKey ? String(row[emailKey] ?? "").trim() : "";
+      const userId = userIdKey ? String(row[userIdKey] ?? "").trim() : "";
+
+      if (!email) {
+        return null;
+      }
+
+      return {
+        email,
+        userId,
+        values: Object.fromEntries(
+          Object.entries(row).map(([header, value]) => [
+            header,
+            String(value ?? "").trim(),
+          ]),
+        ),
+      };
+    })
+    .filter((row): row is UUIDRow => row !== null);
+
+  console.log("Parsed UUID:", lookup.length);
+
+  return {
+    lookup,
+  };
+}
+
+export async function parseClassBookingSheet(
+  file: File,
+): Promise<ParsedClassBookingSheet> {
+  const rows = await readWorksheet(file);
+
+  if (rows.length === 0) {
+    return {
+      lookup: [],
+    };
+  }
+
+  const firstRow = rows[0];
+
+  console.log("Class Booking columns:", Object.keys(firstRow));
+
+  const userIdKey = findPreferredColumnKey(
+    firstRow,
+    [
+      "User ID",
+      "Dimension - User ID",
+      "UUID",
+      "User UUID",
+      "Glofox User ID",
+      "Member ID",
+      "Customer ID",
+    ],
+    ["userid", "user_id", "glofox user id", "glofox id"],
+  );
+  const programIdKey = findPreferredColumnKey(
+    firstRow,
+    [
+      "Program ID",
+      "Programme ID",
+      "Dimension - Program ID",
+      "Class Program ID",
+      "Flt Booking Events Program ID",
+    ],
+    ["programid", "program_id", "programmeid", "programme_id"],
+  );
+  const scheduleCodeKey = findPreferredColumnKey(
+    firstRow,
+    [
+      "Schedule Code",
+      "ScheduleCode",
+      "Schedule",
+      "Class Schedule Code",
+      "Flt Booking Events Schedule Code",
+    ],
+    ["schedulecode", "schedule_code"],
+  );
+
+  if (!userIdKey || !programIdKey || !scheduleCodeKey) {
+    throw new Error(
+      "Class Booking file must include User ID, Program ID, and Schedule Code columns.",
+    );
+  }
+
+  const lookup = rows
+    .map<ClassBookingRow | null>((row) => {
+      const userId = userIdKey ? String(row[userIdKey] ?? "").trim() : "";
+      const programId = programIdKey
+        ? String(row[programIdKey] ?? "").trim()
+        : "";
+      const scheduleCode = scheduleCodeKey
+        ? String(row[scheduleCodeKey] ?? "").trim()
+        : "";
+
+      if (!userId) {
+        return null;
+      }
+
+      return {
+        userId,
+        programId,
+        scheduleCode,
+        values: Object.fromEntries(
+          Object.entries(row).map(([header, value]) => [
+            header,
+            String(value ?? "").trim(),
+          ]),
+        ),
+      };
+    })
+    .filter((row): row is ClassBookingRow => row !== null);
+
+  console.log("Parsed Class Booking:", lookup.length);
 
   return {
     lookup,

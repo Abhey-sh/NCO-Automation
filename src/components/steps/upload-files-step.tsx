@@ -14,8 +14,10 @@ import { Card, CardContent } from "../ui/card";
 import { useAppStore, type UploadItem } from "../../store/app-store";
 import { cn } from "../../lib/utils";
 import {
+  parseClassBookingSheet,
   parseKPISheet,
   parseMembershipPlanNameSheet,
+  parseUUIDSheet,
 } from "../../services/excel-parser";
 
 interface UploadFilesStepProps {
@@ -58,6 +60,10 @@ export function UploadFilesStep({ onContinue }: UploadFilesStepProps) {
   const setStudentNames = useAppStore((state) => state.setStudentNames);
   const setMembershipPlanLookup = useAppStore(
     (state) => state.setMembershipPlanLookup,
+  );
+  const setUUIDLookup = useAppStore((state) => state.setUUIDLookup);
+  const setClassBookingLookup = useAppStore(
+    (state) => state.setClassBookingLookup,
   );
   const setStudentRecords = useAppStore((state) => state.setStudentRecords);
   const setFileData = useAppStore((state) => state.setFileData);
@@ -106,9 +112,15 @@ export function UploadFilesStep({ onContinue }: UploadFilesStepProps) {
         const parsed = await parseKPISheet(file);
         setStudentNames(parsed.studentNames);
         setStudentRecords(parsed.studentRecords);
+      } else if (uploadId === "uuid") {
+        const parsed = await parseUUIDSheet(file);
+        setUUIDLookup(parsed.lookup);
       } else if (uploadId === "membership-plan-name") {
         const parsed = await parseMembershipPlanNameSheet(file);
         setMembershipPlanLookup(parsed.lookup);
+      } else if (uploadId === "class-booking") {
+        const parsed = await parseClassBookingSheet(file);
+        setClassBookingLookup(parsed.lookup);
       }
 
       const validation = getValidationMessage(file);
@@ -140,8 +152,12 @@ export function UploadFilesStep({ onContinue }: UploadFilesStepProps) {
     if (uploadId === "kpi-sheet") {
       setStudentNames([]);
       setStudentRecords([]);
+    } else if (uploadId === "uuid") {
+      setUUIDLookup([]);
     } else if (uploadId === "membership-plan-name") {
       setMembershipPlanLookup([]);
+    } else if (uploadId === "class-booking") {
+      setClassBookingLookup([]);
     }
   };
 
