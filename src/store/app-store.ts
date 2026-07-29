@@ -5,10 +5,15 @@ import type {
   AccountMetadataRow,
   MembershipCancellationRow,
   MembershipRow,
+  RecurringBookingsRow,
   ReviewedMapping,
 } from "../types/imports";
 
-import type { MembershipPlanLookup } from "../services/excel-parser";
+import type {
+  ClassBookingRow,
+  MembershipPlanLookup,
+  UUIDRow,
+} from "../services/excel-parser";
 
 export type ThemeMode = "light" | "dark";
 export type UploadStatus = "idle" | "uploading" | "valid" | "invalid";
@@ -36,6 +41,8 @@ interface AppState {
   uploads: UploadItem[];
   studentNames: string[];
   studentRecords: StudentRecord[];
+  uuidLookup: UUIDRow[];
+  classBookingLookup: ClassBookingRow[];
   membershipPlanLookup: MembershipPlanLookup[];
   assignedMappings: Record<string, { matchedMember: string; email: string }>;
   memberNotFound: StudentRecord[];
@@ -43,6 +50,7 @@ interface AppState {
   accountMetadataRows: AccountMetadataRow[];
   membershipCancellationRows: MembershipCancellationRow[];
   membershipRows: MembershipRow[];
+  recurringBookingsRows: RecurringBookingsRow[];
   configurationState: {
     studioId: string;
     cycleStartDate: string;
@@ -59,6 +67,8 @@ interface AppState {
   setFileData: (fileId: string, data: File) => void;
   setStudentNames: (names: string[]) => void;
   setStudentRecords: (records: StudentRecord[]) => void;
+  setUUIDLookup: (lookup: UUIDRow[]) => void;
+  setClassBookingLookup: (lookup: ClassBookingRow[]) => void;
   setAssignedMapping: (
     studentName: string,
     mapping: { matchedMember: string; email: string } | null,
@@ -69,6 +79,7 @@ interface AppState {
   setMembershipPlanLookup(lookup: MembershipPlanLookup[]): void;
   setMembershipCancellationRows: (rows: MembershipCancellationRow[]) => void;
   setMembershipRows: (rows: MembershipRow[]) => void;
+  setRecurringBookingsRows: (rows: RecurringBookingsRow[]) => void;
   setConfigurationState: (
     config: Partial<AppState["configurationState"]>,
   ) => void;
@@ -122,6 +133,8 @@ export const useAppStore = create<AppState>()(
       uploads: initialUploads,
       studentNames: [],
       studentRecords: [],
+      uuidLookup: [],
+      classBookingLookup: [],
       membershipPlanLookup: [],
       assignedMappings: {},
       memberNotFound: [],
@@ -129,6 +142,7 @@ export const useAppStore = create<AppState>()(
       accountMetadataRows: [],
       membershipCancellationRows: [],
       membershipRows: [],
+      recurringBookingsRows: [],
       configurationState: {
         studioId: "",
         cycleStartDate: "",
@@ -170,6 +184,14 @@ export const useAppStore = create<AppState>()(
           studentRecords: records,
           studentNames: records.map((record) => record.studentName),
         }),
+      setUUIDLookup: (lookup) =>
+        set({
+          uuidLookup: lookup,
+        }),
+      setClassBookingLookup: (lookup) =>
+        set({
+          classBookingLookup: lookup,
+        }),
       setMembershipPlanLookup: (lookup) =>
         set({
           membershipPlanLookup: lookup,
@@ -194,6 +216,8 @@ export const useAppStore = create<AppState>()(
       setMembershipCancellationRows: (rows) =>
         set({ membershipCancellationRows: rows }),
       setMembershipRows: (rows) => set({ membershipRows: rows }),
+      setRecurringBookingsRows: (rows) =>
+        set({ recurringBookingsRows: rows }),
       setConfigurationState: (config) =>
         set((state) => ({
           configurationState: { ...state.configurationState, ...config },

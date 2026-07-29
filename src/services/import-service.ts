@@ -5,6 +5,8 @@ import type {
   MembershipCancellationRow,
   MembershipRequest,
   MembershipResponse,
+  RecurringBookingsRequest,
+  RecurringBookingsResponse,
 } from "../types/imports";
 
 const defaultApiBaseUrl =
@@ -53,6 +55,13 @@ export function generateMembershipCancellation(
 export function generateMemberships(payload: MembershipRequest) {
   return postImport<MembershipRequest, MembershipResponse>(
     "/imports/memberships",
+    payload,
+  );
+}
+
+export function generateRecurringBookings(payload: RecurringBookingsRequest) {
+  return postImport<RecurringBookingsRequest, RecurringBookingsResponse>(
+    "/imports/recurring-bookings",
     payload,
   );
 }

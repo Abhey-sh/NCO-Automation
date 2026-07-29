@@ -1,4 +1,5 @@
 import type { MembershipPlanLookup } from "../services/excel-parser";
+import type { ClassBookingRow, UUIDRow } from "../services/excel-parser";
 export interface ReviewedMapping {
   studentName: string;
   matchedMember: string;
@@ -29,6 +30,15 @@ export interface MembershipRequest {
   reviewMappings: ReviewedMapping[];
   membershipPlanLookup: MembershipPlanLookup[];
   kpiRecords: MembershipKPIRecord[];
+}
+
+export interface RecurringBookingsRequest {
+  studioId: string;
+  bookStartDate: string;
+  bookUntilDate: string;
+  reviewMappings: ReviewedMapping[];
+  uuidLookup: UUIDRow[];
+  classBookingLookup: ClassBookingRow[];
 }
 
 export interface AccountMetadataRow {
@@ -71,10 +81,25 @@ export interface MembershipRow {
   isRetrying: string;
 }
 
+export interface RecurringBookingsRow {
+  userForeignId: string;
+  studioForeignId: string;
+  studioId: string;
+  programId: string;
+  bookStartTime: string;
+  bookUntilTime: string;
+  scheduleCode: string;
+}
+
 export interface MembershipSkip {
   email: string;
   studentName: string;
   reason: string;
+}
+
+export interface RecurringBookingsSkipSummary {
+  reason: string;
+  count: number;
 }
 
 export interface MembershipResponse {
@@ -82,4 +107,11 @@ export interface MembershipResponse {
   generatedCount: number;
   skippedCount: number;
   skips: MembershipSkip[];
+}
+
+export interface RecurringBookingsResponse {
+  rows: RecurringBookingsRow[];
+  generatedCount: number;
+  skippedCount: number;
+  skips: RecurringBookingsSkipSummary[];
 }

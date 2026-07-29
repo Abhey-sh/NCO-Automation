@@ -50,6 +50,27 @@ class MembershipLookupInput(BaseModel):
     plan_code: str = Field(alias="planCode")
 
 
+class UUIDLookupInput(BaseModel):
+    """Lookup record used to resolve a matched email to a Glofox User ID."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    email: str
+    user_id: str = Field(default="", alias="userId")
+    values: dict[str, str] = Field(default_factory=dict)
+
+
+class ClassBookingLookupInput(BaseModel):
+    """Lookup record used to resolve recurring booking fields by User ID."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    user_id: str = Field(default="", alias="userId")
+    program_id: str = Field(default="", alias="programId")
+    schedule_code: str = Field(default="", alias="scheduleCode")
+    values: dict[str, str] = Field(default_factory=dict)
+
+
 class KPIRecordInput(BaseModel):
     """KPI row retained with its original headers for configurable lookups."""
 
@@ -108,6 +129,21 @@ class MembershipRequest(BaseModel):
     kpi_records: list[KPIRecordInput] = Field(alias="kpiRecords")
 
 
+class RecurringBookingsRequest(BaseModel):
+    """Request payload for Recurring Bookings Import generation."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    studio_id: str = Field(min_length=1, alias="studioId")
+    book_start_date: str = Field(min_length=1, alias="bookStartDate")
+    book_until_date: str = Field(min_length=1, alias="bookUntilDate")
+    review_mappings: list[ReviewMappingInput] = Field(alias="reviewMappings")
+    uuid_lookup: list[UUIDLookupInput] = Field(alias="uuidLookup")
+    class_booking_lookup: list[ClassBookingLookupInput] = Field(
+        alias="classBookingLookup",
+    )
+
+
 # ============================================================================
 # Output Models
 # ============================================================================
@@ -158,10 +194,27 @@ class MembershipRow(BaseModel):
     isRetrying: str = ""
 
 
+class RecurringBookingsRow(BaseModel):
+    """Represents one row in the exact Recurring Bookings Import CSV contract."""
+
+    userForeignId: str
+    studioForeignId: str
+    studioId: str
+    programId: str
+    bookStartTime: str
+    bookUntilTime: str
+    scheduleCode: str
+
+
 class MembershipSkip(BaseModel):
     email: str
     studentName: str
     reason: str
+
+
+class RecurringBookingsSkipSummary(BaseModel):
+    reason: str
+    count: int
 
 
 class MembershipResponse(BaseModel):
@@ -169,3 +222,10 @@ class MembershipResponse(BaseModel):
     generatedCount: int
     skippedCount: int
     skips: list[MembershipSkip]
+
+
+class RecurringBookingsResponse(BaseModel):
+    rows: list[RecurringBookingsRow]
+    generatedCount: int
+    skippedCount: int
+    skips: list[RecurringBookingsSkipSummary]
