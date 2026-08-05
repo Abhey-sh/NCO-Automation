@@ -48,7 +48,13 @@ const membershipColumns: CsvColumn<MembershipRow>[] = [
   { key: "isRetrying", header: "isRetrying" },
 ];
 
-export function MembershipCard() {
+interface MembershipCardProps {
+  eaAgreementsConfirmed: boolean;
+}
+
+export function MembershipCard({
+  eaAgreementsConfirmed,
+}: MembershipCardProps) {
   const configuration = useAppStore((state) => state.configurationState);
   const reviewedMappings = useAppStore((state) => state.reviewedMappings);
   const membershipPlanLookup = useAppStore(
@@ -70,6 +76,11 @@ export function MembershipCard() {
   }, [toastMessage]);
 
   const handleGenerate = async () => {
+    if (!eaAgreementsConfirmed) {
+      setError("Confirm that EA agreements are disabled before generating.");
+      return;
+    }
+
     if (
       !configuration.studioId.trim() ||
       !configuration.cycleStartDate ||
@@ -156,7 +167,12 @@ export function MembershipCard() {
             </div>
             <Button
               onClick={handleGenerate}
-              disabled={isGenerating}
+              disabled={isGenerating || !eaAgreementsConfirmed}
+              title={
+                eaAgreementsConfirmed
+                  ? undefined
+                  : "Confirm that EA agreements are disabled first."
+              }
               className="shrink-0"
             >
               {isGenerating ? (

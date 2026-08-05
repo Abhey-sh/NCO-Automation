@@ -10,7 +10,9 @@ from app.schemas.imports import (
 MISSING_BOOKING_FIELDS = "Missing Program ID or Schedule Code"
 USER_NOT_FOUND_IN_CLASS_BOOKING = "User not found in Class Booking"
 USER_NOT_FOUND_IN_UUID = "User not found in UUID"
+MEMBERSHIP_DEFERRED = "Student has a membership deferral date"
 SKIP_REASON_ORDER = (
+    MEMBERSHIP_DEFERRED,
     MISSING_BOOKING_FIELDS,
     USER_NOT_FOUND_IN_CLASS_BOOKING,
     USER_NOT_FOUND_IN_UUID,
@@ -86,6 +88,20 @@ def generate_recurring_bookings(
     request: RecurringBookingsRequest,
 ) -> RecurringBookingsResponse:
     """Generate Recurring Bookings rows from reviewed exact/manual matches."""
+
+    deferral_header = _normalize_header(
+        request.deferral_date_header or "Deferral Date"
+    )
+    deferred_students = {
+        _normalize(item.student_name)
+        for item in request.kpi_records
+        if item.student_name.strip()
+        and any(
+            _normalize_header(header) == deferral_header
+            and str(value).strip()
+            for header, value in item.values.items()
+        )
+    }
 
     email_to_user_id: dict[str, str] = {}
     for item in request.uuid_lookup:
@@ -166,6 +182,10 @@ def generate_recurring_bookings(
 
     for mapping in request.review_mappings:
         if mapping.match_type.strip().lower() not in ("exact", "manual"):
+            continue
+
+        if _normalize(mapping.student_name) in deferred_students:
+            _add_skip(skips, MEMBERSHIP_DEFERRED)
             continue
 
         email = mapping.email.strip()

@@ -11,6 +11,7 @@ class RecurringBookingsGeneratorTests(unittest.TestCase):
                 "studioId": "studio-1",
                 "bookStartDate": "13-07-2026",
                 "bookUntilDate": "13-07-2028",
+                "deferralDateHeader": "Custom Deferral",
                 "reviewMappings": [
                     {
                         "studentName": "Exact Student",
@@ -29,6 +30,16 @@ class RecurringBookingsGeneratorTests(unittest.TestCase):
                         "matchedMember": "",
                         "email": "ignored@example.com",
                         "matchType": "unmatched",
+                    },
+                ],
+                "kpiRecords": [
+                    {
+                        "studentName": "Exact Student",
+                        "values": {"Custom Deferral": ""},
+                    },
+                    {
+                        "studentName": "Manual Student",
+                        "values": {"Custom Deferral": ""},
                     },
                 ],
                 "uuidLookup": [
@@ -82,6 +93,25 @@ class RecurringBookingsGeneratorTests(unittest.TestCase):
         self.assertEqual(row.bookStartTime, "2026-07-13T00:00:00Z")
         self.assertEqual(row.bookUntilTime, "2028-07-13T00:00:00Z")
         self.assertEqual(row.scheduleCode, "schedule-1")
+
+    def test_skips_students_with_a_membership_deferral_date(self) -> None:
+        request = self.make_request()
+        request.kpi_records[0].values["Custom Deferral"] = "15-08-2026"
+
+        result = generate_recurring_bookings(request)
+
+        self.assertEqual(result.generatedCount, 1)
+        self.assertEqual(result.rows[0].userForeignId, "manual@example.com")
+        self.assertEqual(result.skippedCount, 1)
+        self.assertEqual(
+            [skip.model_dump() for skip in result.skips],
+            [
+                {
+                    "reason": "Student has a membership deferral date",
+                    "count": 1,
+                }
+            ],
+        )
 
     def test_returns_aggregated_skip_reasons(self) -> None:
         request = self.make_request()

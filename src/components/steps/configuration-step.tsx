@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { InputMask } from '@react-input/mask'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Calendar, CheckCircle2 } from 'lucide-react'
@@ -25,6 +25,67 @@ interface DateFieldProps {
 }
 
 const DATE_FORMAT_ERROR = 'Please enter the date in DD-MM-YYYY format.'
+const DEFERRAL_HEADER_TARGETS = [
+  'Deferral Date',
+  'Membership Deferral Date',
+  'Deferred Date',
+  'Defer Date',
+]
+const PRICE_HEADER_TARGETS = [
+  'Membership price with discount',
+  'Discounted Membership Price',
+  'Membership Price',
+  'Price with discount',
+]
+
+function normalizeHeader(value: string) {
+  return value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function getSimilarity(leftValue: string, rightValue: string) {
+  const left = normalizeHeader(leftValue)
+  const right = normalizeHeader(rightValue)
+  if (left === right) return 100
+  if (!left || !right) return 0
+
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index)
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const current = [leftIndex]
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const cost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1
+      current[rightIndex] = Math.min(
+        current[rightIndex - 1] + 1,
+        previous[rightIndex] + 1,
+        previous[rightIndex - 1] + cost,
+      )
+    }
+    previous.splice(0, previous.length, ...current)
+  }
+
+  return Math.round(
+    (1 - previous[right.length] / Math.max(left.length, right.length)) * 100,
+  )
+}
+
+function findClosestHeader(headers: string[], targets: string[]) {
+  let closestHeader = ''
+  let closestScore = -1
+
+  headers.forEach((header) => {
+    const score = Math.max(...targets.map((target) => getSimilarity(header, target)))
+    if (score > closestScore) {
+      closestHeader = header
+      closestScore = score
+    }
+  })
+
+  return closestHeader
+}
 
 function parseDisplayDate(value: string): ParsedDate | null {
   const match = /^(\d{2})-(\d{2})-(\d{4})$/.exec(value)
@@ -150,6 +211,7 @@ export function ConfigurationStep() {
   const setCurrentStep = useAppStore((state) => state.setCurrentStep)
   const configurationState = useAppStore((state) => state.configurationState)
   const setConfigurationState = useAppStore((state) => state.setConfigurationState)
+  const studentRecords = useAppStore((state) => state.studentRecords)
 
   const {
     studioId = '',
@@ -160,6 +222,47 @@ export function ConfigurationStep() {
     bookStartDateTime,
     bookUntilDateTime,
   } = configurationState
+  const kpiHeaders = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          studentRecords.flatMap((record) => Object.keys(record.values ?? {})),
+        ),
+      ),
+    [studentRecords],
+  )
+  const suggestedDeferralHeader = useMemo(
+    () => findClosestHeader(kpiHeaders, DEFERRAL_HEADER_TARGETS),
+    [kpiHeaders],
+  )
+  const suggestedPriceHeader = useMemo(
+    () => findClosestHeader(kpiHeaders, PRICE_HEADER_TARGETS),
+    [kpiHeaders],
+  )
+
+  useEffect(() => {
+    if (kpiHeaders.length === 0) return
+
+    const updates: Partial<typeof configurationState> = {}
+    if (!kpiHeaders.includes(deferralDateHeader) && suggestedDeferralHeader) {
+      updates.deferralDateHeader = suggestedDeferralHeader
+    }
+    if (!kpiHeaders.includes(membershipPriceHeader) && suggestedPriceHeader) {
+      updates.membershipPriceHeader = suggestedPriceHeader
+    }
+    if (Object.keys(updates).length > 0) {
+      setConfigurationState(updates)
+    }
+  }, [
+    configurationState,
+    deferralDateHeader,
+    kpiHeaders,
+    membershipPriceHeader,
+    setConfigurationState,
+    suggestedDeferralHeader,
+    suggestedPriceHeader,
+  ])
+
   const errors = {
     studioId: studioId.trim() ? '' : 'This field is required',
     cycleStartDate: getDateError(cycleStartDate),
@@ -265,26 +368,58 @@ export function ConfigurationStep() {
                   Deferral Date Header
                   <span className="ml-1 text-red-500">*</span>
                 </label>
-                <Input
+                <select
                   id="deferral-date-header"
                   value={deferralDateHeader}
-                  onChange={(event) => setConfigurationState({ deferralDateHeader: event.target.value })}
+                  onChange={(event) =>
+                    setConfigurationState({ deferralDateHeader: event.target.value })
+                  }
                   onBlur={() => markFieldTouched('deferralDateHeader')}
                   aria-invalid={Boolean(visibleError('deferralDateHeader'))}
-                />
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                  disabled={kpiHeaders.length === 0}
+                >
+                  {kpiHeaders.length === 0 ? (
+                    <option value={deferralDateHeader}>No KPI headers found</option>
+                  ) : null}
+                  {kpiHeaders.map((header) => (
+                    <option key={header} value={header}>
+                      {header}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Closest matching KPI header is selected automatically. Choose another column if needed.
+                </p>
               </div>
               <div className="space-y-2">
                 <label htmlFor="membership-price-header" className="block text-sm font-semibold text-slate-900 dark:text-white">
-                  Membership Price Header
+                  Deferral Membership Price Header
                   <span className="ml-1 text-red-500">*</span>
                 </label>
-                <Input
+                <select
                   id="membership-price-header"
                   value={membershipPriceHeader}
-                  onChange={(event) => setConfigurationState({ membershipPriceHeader: event.target.value })}
+                  onChange={(event) =>
+                    setConfigurationState({ membershipPriceHeader: event.target.value })
+                  }
                   onBlur={() => markFieldTouched('membershipPriceHeader')}
                   aria-invalid={Boolean(visibleError('membershipPriceHeader'))}
-                />
+                  className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-700 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                  disabled={kpiHeaders.length === 0}
+                >
+                  {kpiHeaders.length === 0 ? (
+                    <option value={membershipPriceHeader}>No KPI headers found</option>
+                  ) : null}
+                  {kpiHeaders.map((header) => (
+                    <option key={header} value={header}>
+                      {header}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Closest matching KPI header is selected automatically. Choose another column if needed.
+                </p>
               </div>
               <DateField
                 id="book-start-date"

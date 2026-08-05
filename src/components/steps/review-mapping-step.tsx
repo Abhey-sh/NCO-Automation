@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type UIEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, CheckCircle2, Phone, Search, Sparkles, UserCheck2, XCircle } from 'lucide-react'
@@ -11,6 +11,8 @@ import type { MembershipPlanLookup } from '../../services/excel-parser'
 import { cn } from '../../lib/utils'
 
 const filterOptions = ['All', 'Matched', 'Not Matched'] as const
+const TABLE_ROW_HEIGHT = 58
+const TABLE_OVERSCAN = 6
 
 type FilterValue = (typeof filterOptions)[number]
 
@@ -36,6 +38,8 @@ export function ReviewMappingStep() {
   const [filter, setFilter] = useState<FilterValue>('All')
   const [rows, setRows] = useState<ReviewMappingRow[]>([])
   const [activeStudent, setActiveStudent] = useState<string | null>(null)
+  const [tableScrollTop, setTableScrollTop] = useState(0)
+  const [tableViewportHeight, setTableViewportHeight] = useState(600)
   const [dropdownPlacement, setDropdownPlacement] = useState({
     direction: 'down' as 'up' | 'down',
     top: 0,
@@ -45,6 +49,7 @@ export function ReviewMappingStep() {
     ready: false,
   })
   const tableContainerRef = useRef<HTMLDivElement>(null)
+  const tableScrollRef = useRef<HTMLDivElement>(null)
   const activeInputRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLUListElement>(null)
 
@@ -59,7 +64,7 @@ export function ReviewMappingStep() {
   const assignedMappings = useAppStore((state) => state.assignedMappings)
   const setAssignedMapping = useAppStore((state) => state.setAssignedMapping)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const computed = buildReviewMappingRows(baseRecords, membershipPlanLookup)
 
     // Apply persisted assigned mappings so manual assignments survive reloads
@@ -105,6 +110,48 @@ export function ReviewMappingStep() {
       return matchesFilter && matchesQuery
     })
   }, [filter, query, rows])
+
+  const virtualTable = useMemo(() => {
+    const startIndex = Math.max(
+      0,
+      Math.floor(tableScrollTop / TABLE_ROW_HEIGHT) - TABLE_OVERSCAN,
+    )
+    const visibleCount = Math.ceil(tableViewportHeight / TABLE_ROW_HEIGHT)
+    const endIndex = Math.min(
+      visibleRows.length,
+      startIndex + visibleCount + TABLE_OVERSCAN * 2,
+    )
+
+    return {
+      rows: visibleRows.slice(startIndex, endIndex).map((row, offset) => ({
+        row,
+        index: startIndex + offset,
+      })),
+      paddingTop: startIndex * TABLE_ROW_HEIGHT,
+      paddingBottom: (visibleRows.length - endIndex) * TABLE_ROW_HEIGHT,
+    }
+  }, [tableScrollTop, tableViewportHeight, visibleRows])
+
+  useLayoutEffect(() => {
+    const tableScroll = tableScrollRef.current
+    if (!tableScroll) return
+
+    const updateViewportHeight = () => {
+      setTableViewportHeight(tableScroll.clientHeight)
+    }
+
+    updateViewportHeight()
+    const observer = new ResizeObserver(updateViewportHeight)
+    observer.observe(tableScroll)
+    return () => observer.disconnect()
+  }, [])
+
+  useLayoutEffect(() => {
+    if (tableScrollRef.current) {
+      tableScrollRef.current.scrollTop = 0
+    }
+    setTableScrollTop(0)
+  }, [filter, query])
 
   const summary = useMemo(() => {
     const total = rows.length
@@ -274,6 +321,11 @@ export function ReviewMappingStep() {
     }
   }
 
+  const handleTableScroll = (event: UIEvent<HTMLDivElement>) => {
+    setTableScrollTop(event.currentTarget.scrollTop)
+    if (activeStudent) setActiveStudent(null)
+  }
+
   const handleContinue = () => {
     const notMatched = rows.filter((row) => !row.matched).map((row) => ({ studentName: row.studentName, phoneNumber: row.phoneNumber }))
     const matchedMappings = rows
@@ -389,11 +441,10 @@ export function ReviewMappingStep() {
 
           <div className="box-border w-full max-w-full overflow-hidden rounded-[24px] border border-slate-200/80 dark:border-slate-800/80">
             <div
+              ref={tableScrollRef}
+              onScroll={handleTableScroll}
               className={cn(
-                'w-full max-w-full',
-                filter === 'Not Matched'
-                  ? 'overflow-x-auto'
-                  : 'mapping-table-scroll h-[clamp(320px,calc(100vh-420px),600px)] overflow-auto',
+                'mapping-table-scroll h-[clamp(320px,calc(100vh-420px),600px)] w-full max-w-full overflow-auto',
               )}
             >
               <table className="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
@@ -409,8 +460,16 @@ export function ReviewMappingStep() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-800 dark:bg-slate-950/70">
-                  {visibleRows.map((row, index) => {
-                    const suggestions = getRowSuggestions(row.draftQuery)
+                  {virtualTable.paddingTop > 0 ? (
+                    <tr aria-hidden="true">
+                      <td colSpan={7} style={{ height: virtualTable.paddingTop, padding: 0 }} />
+                    </tr>
+                  ) : null}
+                  {virtualTable.rows.map(({ row, index }) => {
+                    const suggestions =
+                      !row.matched && activeStudent === row.studentName
+                        ? getRowSuggestions(row.draftQuery)
+                        : []
                     const showSuggestionsAbove = index >= visibleRows.length - 3
                     const suggestionOptions = suggestions.map((member) => {
                       const suggestionLabel = getMembershipFullName(member)
@@ -432,6 +491,7 @@ export function ReviewMappingStep() {
                       <tr
                         key={`${row.studentName}-${index}`}
                         className={cn(row.matched ? 'bg-emerald-50/60 dark:bg-emerald-950/20' : 'bg-rose-50/60 dark:bg-rose-950/20')}
+                        style={{ height: TABLE_ROW_HEIGHT }}
                       >
                         <td className="px-2 py-2">
                           <div className="flex items-center gap-2 text-[13px] font-medium text-slate-700 dark:text-slate-200">
@@ -528,6 +588,11 @@ export function ReviewMappingStep() {
                       </tr>
                     )
                   })}
+                  {virtualTable.paddingBottom > 0 ? (
+                    <tr aria-hidden="true">
+                      <td colSpan={7} style={{ height: virtualTable.paddingBottom, padding: 0 }} />
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>

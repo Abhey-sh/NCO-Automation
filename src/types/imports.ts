@@ -36,7 +36,9 @@ export interface RecurringBookingsRequest {
   studioId: string;
   bookStartDate: string;
   bookUntilDate: string;
+  deferralDateHeader: string;
   reviewMappings: ReviewedMapping[];
+  kpiRecords: MembershipKPIRecord[];
   uuidLookup: UUIDRow[];
   classBookingLookup: ClassBookingRow[];
 }

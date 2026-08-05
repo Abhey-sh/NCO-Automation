@@ -1,6 +1,6 @@
 # NCO Automation Studio
 
-NCO Automation Studio is a React, Electron, and FastAPI application for preparing membership migration data. It supports source spreadsheet uploads, student-to-member mapping, migration configuration, and CSV generation for Account Metadata, Membership Cancellation, and Membership imports.
+NCO Automation Studio is a React, Electron, and FastAPI application for preparing membership migration data. It supports source spreadsheet uploads, student-to-member mapping, migration configuration, and CSV generation for Account Metadata, Membership Cancellation, Membership, and Recurring Bookings imports.
 
 ## Technology
 
@@ -87,13 +87,23 @@ Required uploads:
 3. Membership + Plan Name
 4. Class Booking
 
-Only the KPI Sheet and Membership + Plan Name spreadsheets are currently parsed. UUID and Class Booking are checked only for a non-empty file and a filename extension.
+All four files are parsed from their first worksheet. Header matching supports common Glofox export names and simplified alternatives.
 
 #### KPI Sheet format
 
 The first worksheet needs a student-name column. Supported headings include `Student Name`, `StudentName`, `student_name`, `Name`, and `Student`.
 
 A phone column is optional. Supported headings include `Phone`, `Phone Number`, `Mobile`, `Contact Number`, and `Telephone`, including similar underscore or no-space forms.
+
+The configuration screen reads the available KPI headers, automatically selects the closest Deferral Date and Membership Price columns, and provides dropdowns for choosing different columns when required.
+
+#### UUID format
+
+The UUID worksheet must include email and user ID columns. Supported user ID headings include `User ID`, `Dimension - User ID`, `UUID`, `User UUID`, `Glofox User ID`, `Member ID`, and `Customer ID`.
+
+#### Class Booking format
+
+The Class Booking worksheet must include user ID, program ID, and schedule code columns. Glofox headings such as `Dimension - User Id`, `Flt Booking Events Program ID`, and `Flt Booking Events Schedule Code` are supported.
 
 #### Membership + Plan Name format
 
@@ -103,7 +113,7 @@ Name is read from headings such as `Full Name`, `Dimension - User Full Name`, `U
 
 ### Step 2 — Review Mapping
 
-After all required files are accepted, select **Review Mapping**. Exact normalized student names are matched automatically against Membership + Plan Name records. Remaining students can be assigned manually or marked as not found.
+After all required files are accepted, select **Review Mapping**. Exact normalized student names are matched automatically against Membership + Plan Name records. Remaining students can be assigned manually or marked as not found. Indexed matching, on-demand suggestions, and virtualized table rows keep large review sets responsive.
 
 ### Step 3 — Configuration
 
@@ -111,7 +121,7 @@ Collects migration settings used by the generators, including:
 
 - Studio ID
 - Cycle Start Date and Next Payment Date (`DD-MM-YYYY`)
-- Deferral Date and Membership Price KPI headers
+- Deferral Date and Deferral Membership Price KPI headers, selected from detected KPI columns
 - Book Start Date and Book Until Date
 
 ### Step 4 — Generate Outputs
@@ -123,8 +133,11 @@ Uses the completed Review Mapping results, Membership + Plan Name lookup, KPI re
 | Account Metadata | `account_metadata.csv` | Requires Studio ID and matched students |
 | Membership Cancellation | `membership_cancellation.csv` | Requires Membership + Plan Name lookup and matched students |
 | Membership | `membership.csv` | Requires Studio ID, cycle/next payment dates, and Membership + Plan Name lookup; reports skipped rows |
+| Recurring Bookings | `recurring_bookings.csv` | Resolves matched emails through UUID and Class Booking data; excludes students with a membership deferral date |
 
 Each generator supports preview of the first 50 rows and CSV download.
+
+Before generating Membership Cancellation, Membership, or Recurring Bookings, confirm that EA agreements are disabled. Account Metadata can be generated without this confirmation.
 
 No example spreadsheets are currently included.
 
@@ -138,7 +151,13 @@ npm run dev:backend
 npm run dev:full
 ```
 
-Backend unit tests live under `backend/tests/`. There is currently no frontend test suite or `npm test` script.
+Run backend unit tests from the `backend` directory:
+
+```bash
+python -m unittest discover -s tests
+```
+
+There is currently no frontend test suite or `npm test` script.
 
 ## Known limitations
 
@@ -146,7 +165,7 @@ Backend unit tests live under `backend/tests/`. There is currently no frontend t
 - Uploaded files and parsed records do not survive a full page reload (only theme preference is persisted).
 - The FastAPI backend must be running for import generation.
 - XLSX export is not implemented; generated outputs are CSV only.
-- UUID and Class Booking uploads are accepted but not yet used by generators.
+- Only the first worksheet in each uploaded spreadsheet is processed.
 
 ## Project structure
 

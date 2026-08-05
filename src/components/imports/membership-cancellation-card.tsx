@@ -24,7 +24,13 @@ const membershipCancellationColumns: CsvColumn<MembershipCancellationRow>[] = [
   { key: "userId", header: "userId" },
 ];
 
-export function MembershipCancellationCard() {
+interface MembershipCancellationCardProps {
+  eaAgreementsConfirmed: boolean;
+}
+
+export function MembershipCancellationCard({
+  eaAgreementsConfirmed,
+}: MembershipCancellationCardProps) {
   const reviewedMappings = useAppStore((state) => state.reviewedMappings);
   const membershipLookup = useAppStore((state) => state.membershipPlanLookup);
   const rows = useAppStore((state) => state.membershipCancellationRows);
@@ -41,6 +47,11 @@ export function MembershipCancellationCard() {
   }, [toastMessage]);
 
   const handleGenerate = async () => {
+    if (!eaAgreementsConfirmed) {
+      setError("Confirm that EA agreements are disabled before generating.");
+      return;
+    }
+
     if (membershipLookup.length === 0) {
       setError(
         "Membership + Plan Name lookup file is required before generating Membership Cancellation.",
@@ -110,7 +121,12 @@ export function MembershipCancellationCard() {
             </div>
             <Button
               onClick={handleGenerate}
-              disabled={isGenerating}
+              disabled={isGenerating || !eaAgreementsConfirmed}
+              title={
+                eaAgreementsConfirmed
+                  ? undefined
+                  : "Confirm that EA agreements are disabled first."
+              }
               className="shrink-0"
             >
               {isGenerating ? (

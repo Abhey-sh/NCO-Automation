@@ -137,7 +137,15 @@ class RecurringBookingsRequest(BaseModel):
     studio_id: str = Field(min_length=1, alias="studioId")
     book_start_date: str = Field(min_length=1, alias="bookStartDate")
     book_until_date: str = Field(min_length=1, alias="bookUntilDate")
+    deferral_date_header: str = Field(
+        default="Deferral Date",
+        alias="deferralDateHeader",
+    )
     review_mappings: list[ReviewMappingInput] = Field(alias="reviewMappings")
+    kpi_records: list[KPIRecordInput] = Field(
+        default_factory=list,
+        alias="kpiRecords",
+    )
     uuid_lookup: list[UUIDLookupInput] = Field(alias="uuidLookup")
     class_booking_lookup: list[ClassBookingLookupInput] = Field(
         alias="classBookingLookup",

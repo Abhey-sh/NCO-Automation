@@ -37,6 +37,8 @@ function getSkipMessage(skip: RecurringBookingsSkipSummary) {
   const recordLabel = skip.count === 1 ? "record" : "records";
 
   switch (skip.reason) {
+    case "Student has a membership deferral date":
+      return `${skip.count} ${recordLabel} skipped because the student has a membership deferral date.`;
     case "Missing Program ID or Schedule Code":
       return `${skip.count} ${recordLabel} skipped because Program ID or Schedule Code was missing.`;
     case "User not found in Class Booking":
@@ -48,9 +50,16 @@ function getSkipMessage(skip: RecurringBookingsSkipSummary) {
   }
 }
 
-export function RecurringBookingsCard() {
+interface RecurringBookingsCardProps {
+  eaAgreementsConfirmed: boolean;
+}
+
+export function RecurringBookingsCard({
+  eaAgreementsConfirmed,
+}: RecurringBookingsCardProps) {
   const configuration = useAppStore((state) => state.configurationState);
   const reviewedMappings = useAppStore((state) => state.reviewedMappings);
+  const studentRecords = useAppStore((state) => state.studentRecords);
   const uuidLookup = useAppStore((state) => state.uuidLookup);
   const classBookingLookup = useAppStore((state) => state.classBookingLookup);
   const rows = useAppStore((state) => state.recurringBookingsRows);
@@ -71,6 +80,11 @@ export function RecurringBookingsCard() {
     setSkips([]);
     setToastMessage("");
     setError("");
+
+    if (!eaAgreementsConfirmed) {
+      setError("Confirm that EA agreements are disabled before generating.");
+      return;
+    }
 
     if (
       !configuration.studioId.trim() ||
@@ -104,7 +118,13 @@ export function RecurringBookingsCard() {
         studioId: configuration.studioId.trim(),
         bookStartDate: configuration.bookStartDateTime,
         bookUntilDate: configuration.bookUntilDateTime,
+        deferralDateHeader:
+          configuration.deferralDateHeader || "Deferral Date",
         reviewMappings: reviewedMappings,
+        kpiRecords: studentRecords.map(({ studentName, values }) => ({
+          studentName,
+          values: values ?? {},
+        })),
         uuidLookup,
         classBookingLookup,
       });
@@ -169,7 +189,12 @@ export function RecurringBookingsCard() {
             </div>
             <Button
               onClick={handleGenerate}
-              disabled={isGenerating}
+              disabled={isGenerating || !eaAgreementsConfirmed}
+              title={
+                eaAgreementsConfirmed
+                  ? undefined
+                  : "Confirm that EA agreements are disabled first."
+              }
               className="shrink-0"
             >
               {isGenerating ? (

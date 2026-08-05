@@ -96,15 +96,25 @@ export function buildReviewMappingRows(
   studentRecords: StudentRecord[],
   membershipPlanLookup: MembershipPlanLookup[],
 ): ReviewMappingRow[] {
+  const membersByNormalizedName = new Map<
+    string,
+    { member: MembershipPlanLookup; displayName: string }
+  >()
+
+  membershipPlanLookup.forEach((member) => {
+    const displayName = getMembershipFullName(member)
+    const normalizedName = normalizeName(displayName)
+
+    // Preserve the previous Array.find behavior when duplicate names exist.
+    if (normalizedName && !membersByNormalizedName.has(normalizedName)) {
+      membersByNormalizedName.set(normalizedName, { member, displayName })
+    }
+  })
+
   const results = studentRecords.map((record) => {
     const studentName = record.studentName.trim().replace(/\s+/g, ' ')
     const normalizedStudent = normalizeName(studentName)
-
-    const match = membershipPlanLookup.find((member) => {
-      const fullMemberName = getMembershipFullName(member)
-      const normalizedMember = normalizeName(fullMemberName)
-      return normalizedMember === normalizedStudent
-    })
+    const match = membersByNormalizedName.get(normalizedStudent)
 
     if (!match) {
       return {
@@ -122,19 +132,17 @@ export function buildReviewMappingRows(
       }
     }
 
-    const displayName = getMembershipFullName(match)
-
     return {
       studentName,
       phoneNumber: record.phoneNumber,
-      matchedMember: displayName,
-      email: match.email,
+      matchedMember: match.displayName,
+      email: match.member.email,
       matched: true,
-      suggestedMember: displayName,
-      suggestedEmail: match.email,
+      suggestedMember: match.displayName,
+      suggestedEmail: match.member.email,
       similarity: 100,
       matchType: 'exact' as const,
-      draftQuery: displayName,
+      draftQuery: match.displayName,
       manualAssignmentState: 'assigned' as const,
     }
   })

@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Files } from "lucide-react";
+import { ArrowLeft, Files, ShieldCheck } from "lucide-react";
 
 import { AccountMetadataCard } from "../imports/account-metadata-card";
 import { MembershipCancellationCard } from "../imports/membership-cancellation-card";
@@ -10,6 +11,7 @@ import { useAppStore } from "../../store/app-store";
 
 export function GenerateOutputsStep() {
   const setCurrentStep = useAppStore((state) => state.setCurrentStep);
+  const [eaAgreementsConfirmed, setEaAgreementsConfirmed] = useState(false);
 
   return (
     <motion.div
@@ -39,9 +41,29 @@ export function GenerateOutputsStep() {
       </div>
 
       <AccountMetadataCard />
-      <MembershipCancellationCard />
-      <MembershipCard />
-      <RecurringBookingsCard />
+      <label className="flex cursor-pointer items-start gap-4 rounded-[28px] border border-amber-200 bg-amber-50/80 p-6 shadow-sm transition hover:border-amber-300 dark:border-amber-900/70 dark:bg-amber-950/20 dark:hover:border-amber-800">
+        <input
+          type="checkbox"
+          checked={eaAgreementsConfirmed}
+          onChange={(event) => setEaAgreementsConfirmed(event.target.checked)}
+          className="mt-1 h-5 w-5 shrink-0 cursor-pointer rounded border-amber-300 text-blue-600 focus:ring-blue-500"
+        />
+        <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+        <span>
+          <span className="block font-semibold text-slate-900 dark:text-white">
+            Is EA agreements are disabled?
+          </span>
+          <span className="mt-1 block text-sm leading-6 text-slate-600 dark:text-slate-300">
+            Membership Cancellation, Membership, and Recurring Bookings cannot
+            be generated until this check is completed.
+          </span>
+        </span>
+      </label>
+      <MembershipCancellationCard
+        eaAgreementsConfirmed={eaAgreementsConfirmed}
+      />
+      <MembershipCard eaAgreementsConfirmed={eaAgreementsConfirmed} />
+      <RecurringBookingsCard eaAgreementsConfirmed={eaAgreementsConfirmed} />
 
       <div>
         <Button
