@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { InputMask } from '@react-input/mask'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Calendar, CheckCircle2 } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Calendar, CheckCircle2 } from 'lucide-react'
 
 import { Button } from '../ui/button'
 import { Card, CardContent } from '../ui/card'
@@ -212,6 +212,7 @@ export function ConfigurationStep() {
   const configurationState = useAppStore((state) => state.configurationState)
   const setConfigurationState = useAppStore((state) => state.setConfigurationState)
   const studentRecords = useAppStore((state) => state.studentRecords)
+  const memberNotFound = useAppStore((state) => state.memberNotFound)
 
   const {
     studioId = '',
@@ -320,6 +321,35 @@ export function ConfigurationStep() {
           </div>
         </div>
       </div>
+
+      {memberNotFound.length > 0 ? (
+        <div className="flex flex-col gap-4 rounded-[24px] border border-amber-200 bg-amber-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-amber-900/70 dark:bg-amber-950/30">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-400" />
+            <div>
+              <p className="font-semibold text-amber-900 dark:text-amber-200">
+                {memberNotFound.length}{' '}
+                {memberNotFound.length === 1
+                  ? 'student is'
+                  : 'students are'}{' '}
+                still unmatched
+              </p>
+              <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
+                Return to Review Mapping to assign the remaining students before
+                generating outputs.
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="secondary"
+            onClick={() => setCurrentStep(2)}
+            className="shrink-0"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Review Mapping
+          </Button>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Form Section */}

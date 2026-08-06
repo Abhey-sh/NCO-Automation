@@ -105,6 +105,8 @@ The UUID worksheet must include email and user ID columns. Supported user ID hea
 
 The Class Booking worksheet must include user ID, program ID, and schedule code columns. Glofox headings such as `Dimension - User Id`, `Flt Booking Events Program ID`, and `Flt Booking Events Schedule Code` are supported.
 
+When a User ID has multiple Class Booking rows, the Recurring Bookings generator compares the numeric age range in the KPI `Class Wanted` value with `Flt Booking Events Event Name`. For example, `THU @ 3:30 PM (4-5 year)` matches `4 - 5 Years`. The last row with the matching age range is selected; when no range matches, the last Class Booking row is used.
+
 #### Membership + Plan Name format
 
 The first worksheet must include an email column for a row to be imported. Supported headings include `Dimension - User Email` and `email`.

@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type UIEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, CheckCircle2, Phone, Search, Sparkles, UserCheck2, XCircle } from 'lucide-react'
+import { ArrowLeft, Check, CheckCircle2, Phone, Search, Sparkles, UserCheck2, X, XCircle } from 'lucide-react'
 
 import { Button } from '../ui/button'
 import { Card, CardContent } from '../ui/card'
@@ -13,6 +13,7 @@ import { cn } from '../../lib/utils'
 const filterOptions = ['All', 'Matched', 'Not Matched'] as const
 const TABLE_ROW_HEIGHT = 58
 const TABLE_OVERSCAN = 6
+const AUTO_ACCEPT_SIMILARITY = 80
 
 type FilterValue = (typeof filterOptions)[number]
 
@@ -38,6 +39,10 @@ export function ReviewMappingStep() {
   const [filter, setFilter] = useState<FilterValue>('All')
   const [rows, setRows] = useState<ReviewMappingRow[]>([])
   const [activeStudent, setActiveStudent] = useState<string | null>(null)
+  const [rejectedSuggestions, setRejectedSuggestions] = useState<Record<string, string>>({})
+  const [manuallySelectedStudents, setManuallySelectedStudents] = useState<Set<string>>(
+    () => new Set(),
+  )
   const [tableScrollTop, setTableScrollTop] = useState(0)
   const [tableViewportHeight, setTableViewportHeight] = useState(600)
   const [dropdownPlacement, setDropdownPlacement] = useState({
@@ -70,7 +75,24 @@ export function ReviewMappingStep() {
     // Apply persisted assigned mappings so manual assignments survive reloads
     const mapped = computed.map((r) => {
       const mapping = assignedMappings[r.studentName]
-      if (!mapping) return r
+      if (!mapping) {
+        const rejectedEmail = rejectedSuggestions[r.studentName]
+        if (
+          rejectedEmail &&
+          r.manualAssignmentState === 'ready' &&
+          r.suggestedEmail === rejectedEmail
+        ) {
+          return {
+            ...r,
+            suggestedMember: '',
+            suggestedEmail: '',
+            similarity: 0,
+            draftQuery: '',
+            manualAssignmentState: 'idle' as const,
+          }
+        }
+        return r
+      }
       if (
         r.matchType === 'exact' &&
         r.matchedMember === mapping.matchedMember &&
@@ -95,7 +117,13 @@ export function ReviewMappingStep() {
     })
 
     setRows(mapped)
-  }, [baseRecords, membershipPlanLookup, assignedMappings, setAssignedMapping])
+  }, [
+    baseRecords,
+    membershipPlanLookup,
+    assignedMappings,
+    rejectedSuggestions,
+    setAssignedMapping,
+  ])
 
   const visibleRows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -208,6 +236,12 @@ export function ReviewMappingStep() {
   }, [activeStudent, filter, membershipPlanLookup, rows])
 
   const handleDraftChange = (studentName: string, value: string) => {
+    setManuallySelectedStudents((current) => {
+      if (!current.has(studentName)) return current
+      const updated = new Set(current)
+      updated.delete(studentName)
+      return updated
+    })
     setRows((currentRows) =>
       currentRows.map((row) =>
         row.studentName === studentName && !row.matched
@@ -228,6 +262,17 @@ export function ReviewMappingStep() {
   const handleSuggestionSelect = (studentName: string, member: MembershipPlanLookup) => {
     const displayName = getMembershipFullName(member)
 
+    setRejectedSuggestions((current) => {
+      if (!(studentName in current)) return current
+      const remaining = { ...current }
+      delete remaining[studentName]
+      return remaining
+    })
+    setManuallySelectedStudents((current) => {
+      const updated = new Set(current)
+      updated.add(studentName)
+      return updated
+    })
     setRows((currentRows) =>
       currentRows.map((row) =>
         row.studentName === studentName && !row.matched
@@ -240,6 +285,67 @@ export function ReviewMappingStep() {
               manualAssignmentState: 'ready',
             }
           : row,
+      ),
+    )
+    setActiveStudent(null)
+  }
+
+  const handleAcceptSuggestion = (row: ReviewMappingRow) => {
+    if (!row.suggestedMember || !row.suggestedEmail) return
+
+    setRows((currentRows) =>
+      currentRows.map((currentRow) =>
+        currentRow.studentName === row.studentName
+          ? {
+              ...currentRow,
+              matched: true,
+              matchedMember: row.suggestedMember,
+              email: row.suggestedEmail,
+              matchType: 'manual',
+              manualAssignmentState: 'assigned',
+            }
+          : currentRow,
+      ),
+    )
+    setAssignedMapping(row.studentName, {
+      matchedMember: row.suggestedMember,
+      email: row.suggestedEmail,
+    })
+    setManuallySelectedStudents((current) => {
+      if (!current.has(row.studentName)) return current
+      const updated = new Set(current)
+      updated.delete(row.studentName)
+      return updated
+    })
+    setActiveStudent(null)
+  }
+
+  const handleRejectSuggestion = (row: ReviewMappingRow) => {
+    if (row.suggestedEmail) {
+      setRejectedSuggestions((current) => ({
+        ...current,
+        [row.studentName]: row.suggestedEmail,
+      }))
+    }
+    setManuallySelectedStudents((current) => {
+      if (!current.has(row.studentName)) return current
+      const updated = new Set(current)
+      updated.delete(row.studentName)
+      return updated
+    })
+    setRows((currentRows) =>
+      currentRows.map((currentRow) =>
+        currentRow.studentName === row.studentName
+          ? {
+              ...currentRow,
+              suggestedMember: '',
+              suggestedEmail: '',
+              similarity: 0,
+              draftQuery: '',
+              matchType: null,
+              manualAssignmentState: 'idle',
+            }
+          : currentRow,
       ),
     )
     setActiveStudent(null)
@@ -309,6 +415,7 @@ export function ReviewMappingStep() {
     })
 
     setRows(updatedRows)
+    setManuallySelectedStudents(new Set())
     setActiveStudent(null)
   }
 
@@ -327,8 +434,46 @@ export function ReviewMappingStep() {
   }
 
   const handleContinue = () => {
-    const notMatched = rows.filter((row) => !row.matched).map((row) => ({ studentName: row.studentName, phoneNumber: row.phoneNumber }))
-    const matchedMappings = rows
+    const newlyAcceptedStudents = new Set<string>()
+    const finalizedRows: ReviewMappingRow[] = rows.map((row) => {
+      const hasReadySuggestion =
+        !row.matched &&
+        row.manualAssignmentState === 'ready' &&
+        Boolean(row.suggestedMember) &&
+        Boolean(row.suggestedEmail)
+      const shouldAcceptSuggestion =
+        hasReadySuggestion &&
+        (manuallySelectedStudents.has(row.studentName) ||
+          row.similarity > AUTO_ACCEPT_SIMILARITY)
+
+      if (!shouldAcceptSuggestion) return row
+
+      newlyAcceptedStudents.add(row.studentName)
+      return {
+        ...row,
+        matched: true,
+        matchedMember: row.suggestedMember,
+        email: row.suggestedEmail,
+        matchType: 'manual',
+        manualAssignmentState: 'assigned',
+      }
+    })
+
+    finalizedRows.forEach((row) => {
+      if (
+        row.matched &&
+        row.matchType === 'manual' &&
+        newlyAcceptedStudents.has(row.studentName)
+      ) {
+        setAssignedMapping(row.studentName, {
+          matchedMember: row.matchedMember,
+          email: row.email,
+        })
+      }
+    })
+
+    const notMatched = finalizedRows.filter((row) => !row.matched).map((row) => ({ studentName: row.studentName, phoneNumber: row.phoneNumber }))
+    const matchedMappings = finalizedRows
       .filter((row) => row.matched && row.email && row.email !== '—')
       .map((row) => ({
         studentName: row.studentName,
@@ -337,6 +482,7 @@ export function ReviewMappingStep() {
         matchType: row.matchType ?? 'exact',
       }))
 
+    setRows(finalizedRows)
     setMemberNotFound(notMatched)
     setReviewedMappings(matchedMappings)
     setCurrentStep(3)
@@ -447,7 +593,16 @@ export function ReviewMappingStep() {
                 'mapping-table-scroll h-[clamp(320px,calc(100vh-420px),600px)] w-full max-w-full overflow-auto',
               )}
             >
-              <table className="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-800">
+              <table className="w-full min-w-[1025px] table-fixed divide-y divide-slate-200 text-sm dark:divide-slate-800">
+                <colgroup>
+                  <col style={{ width: 100 }} />
+                  <col style={{ width: 130 }} />
+                  <col style={{ width: 125 }} />
+                  <col style={{ width: 230 }} />
+                  <col style={{ width: 160 }} />
+                  <col style={{ width: 90 }} />
+                  <col style={{ width: 190 }} />
+                </colgroup>
                 <thead className={cn('bg-slate-50/90 dark:bg-slate-900/80', filter !== 'Not Matched' && 'sticky top-0 z-10')}>
                   <tr>
                     <th className="px-2 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">Status</th>
@@ -456,7 +611,7 @@ export function ReviewMappingStep() {
                     <th className="px-2 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">Suggested Member</th>
                     <th className="px-2 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">Email</th>
                     <th className="px-2 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">Similarity</th>
-                    <th className="px-2 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">Status</th>
+                    <th className="px-2 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] text-slate-600 dark:text-slate-300">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white dark:divide-slate-800 dark:bg-slate-950/70">
@@ -514,7 +669,12 @@ export function ReviewMappingStep() {
                         </td>
                         <td className="px-3 py-2 text-slate-600 dark:text-slate-300">
                           {row.matched ? (
-                            <span className="font-medium text-slate-800 dark:text-slate-100">{row.matchedMember}</span>
+                            <span
+                              className="block truncate font-medium text-slate-800 dark:text-slate-100"
+                              title={row.matchedMember}
+                            >
+                              {row.matchedMember}
+                            </span>
                           ) : (
                             <div ref={activeStudent === row.studentName ? activeInputRef : null} className="relative">
                               <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-2 py-1.5 shadow-sm dark:border-slate-700 dark:bg-slate-900">
@@ -526,6 +686,7 @@ export function ReviewMappingStep() {
                                     onBlur={() => setActiveStudent(null)}
                                     onKeyDown={(event) => handleKeyDown(event, row.studentName, suggestions)}
                                     placeholder="Search by first or last name"
+                                    title={row.draftQuery}
                                     className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500"
                                   />
                               </div>
@@ -565,8 +726,21 @@ export function ReviewMappingStep() {
                             </div>
                           )}
                         </td>
-                        <td className="px-2 py-2 text-sm text-slate-600 dark:text-slate-300">
-                          {row.matched ? row.email : row.suggestedEmail ? row.suggestedEmail : '—'}
+                        <td className="px-2 py-2 text-xs text-slate-500 dark:text-slate-400">
+                          <div
+                            className="truncate"
+                            title={
+                              row.matched
+                                ? row.email
+                                : row.suggestedEmail || undefined
+                            }
+                          >
+                            {row.matched
+                              ? row.email
+                              : row.suggestedEmail
+                                ? row.suggestedEmail
+                                : '—'}
+                          </div>
                         </td>
                         <td className="px-2 py-2 text-sm text-slate-600 dark:text-slate-300">
                           {row.matched ? '100%' : row.similarity > 0 ? `${row.similarity}%` : '—'}
@@ -578,9 +752,24 @@ export function ReviewMappingStep() {
                               <span className="text-sm font-semibold">Assigned</span>
                             </div>
                           ) : row.manualAssignmentState === 'ready' && row.suggestedEmail ? (
-                            <span className="text-sm font-semibold text-amber-600 dark:text-amber-400">
-                              Ready to assign
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleAcceptSuggestion(row)}
+                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-300 dark:hover:bg-emerald-900/70"
+                              >
+                                <Check className="h-3.5 w-3.5" />
+                                Accept
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleRejectSuggestion(row)}
+                                className="inline-flex items-center gap-1 rounded-lg bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700 transition hover:bg-rose-200 dark:bg-rose-950/50 dark:text-rose-300 dark:hover:bg-rose-900/70"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                                Reject
+                              </button>
+                            </div>
                           ) : (
                             <span className="text-sm text-slate-500 dark:text-slate-400">Pending</span>
                           )}

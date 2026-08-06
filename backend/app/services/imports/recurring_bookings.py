@@ -1,3 +1,4 @@
+import re
 from datetime import date, datetime, timedelta
 
 from app.schemas.imports import (
@@ -37,6 +38,17 @@ def _first_available_value(row: dict[str, str], headers: list[str]) -> str:
         if value:
             return value
     return ""
+
+
+def _extract_age_range(value: str) -> tuple[int, int] | None:
+    match = re.search(
+        r"(?<!\d)(\d{1,2})\s*(?:-|–|—|to)\s*(\d{1,2})(?!\d)",
+        value,
+        flags=re.IGNORECASE,
+    )
+    if match is None:
+        return None
+    return int(match.group(1)), int(match.group(2))
 
 
 def _parse_date(value: str) -> date | None:
@@ -102,6 +114,14 @@ def generate_recurring_bookings(
             for header, value in item.values.items()
         )
     }
+    class_wanted_by_student = {
+        _normalize(item.student_name): _first_available_value(
+            item.values,
+            ["Class Wanted"],
+        )
+        for item in request.kpi_records
+        if item.student_name.strip()
+    }
 
     email_to_user_id: dict[str, str] = {}
     for item in request.uuid_lookup:
@@ -131,7 +151,7 @@ def generate_recurring_bookings(
         if email and user_id:
             email_to_user_id[_normalize(email)] = user_id
 
-    user_id_to_booking: dict[str, tuple[str, str]] = {}
+    user_id_to_bookings: dict[str, list[tuple[str, str, str]]] = {}
     for item in request.class_booking_lookup:
         user_id = item.user_id.strip() or _first_available_value(
             item.values,
@@ -166,8 +186,18 @@ def generate_recurring_bookings(
                 "Flt Booking Events Schedule Code",
             ],
         )
+        event_name = _first_available_value(
+            item.values,
+            [
+                "Flt Booking Events Event Name",
+                "Event Name",
+                "Class Name",
+            ],
+        )
         if user_id:
-            user_id_to_booking[_normalize(user_id)] = (program_id, schedule_code)
+            user_id_to_bookings.setdefault(_normalize(user_id), []).append(
+                (program_id, schedule_code, event_name)
+            )
 
     book_start_time = _format_book_time(request.book_start_date)
     book_until_time = _format_book_time(request.book_until_date)
@@ -195,11 +225,26 @@ def generate_recurring_bookings(
             _add_skip(skips, USER_NOT_FOUND_IN_UUID)
             continue
 
-        booking_values = user_id_to_booking.get(_normalize(user_id))
-        if booking_values is None:
+        booking_options = user_id_to_bookings.get(_normalize(user_id))
+        if booking_options is None:
             _add_skip(skips, USER_NOT_FOUND_IN_CLASS_BOOKING)
             continue
-        program_id, schedule_code = booking_values
+
+        selected_booking = booking_options[-1]
+        if len(booking_options) > 1:
+            wanted_age_range = _extract_age_range(
+                class_wanted_by_student.get(_normalize(mapping.student_name), "")
+            )
+            if wanted_age_range is not None:
+                matching_bookings = [
+                    booking
+                    for booking in booking_options
+                    if _extract_age_range(booking[2]) == wanted_age_range
+                ]
+                if matching_bookings:
+                    selected_booking = matching_bookings[-1]
+
+        program_id, schedule_code, _ = selected_booking
         if not program_id or not schedule_code:
             _add_skip(skips, MISSING_BOOKING_FIELDS)
             continue

@@ -185,6 +185,76 @@ class RecurringBookingsGeneratorTests(unittest.TestCase):
             [{"reason": "User not found in Class Booking", "count": 1}],
         )
 
+    def test_duplicate_user_id_uses_class_wanted_age_range(self) -> None:
+        request = self.make_request()
+        request.review_mappings = request.review_mappings[:1]
+        request.kpi_records[0].values["Class Wanted"] = (
+            "THU @ 3:30 PM (4-5 year)"
+        )
+        request.class_booking_lookup = [
+            ClassBookingLookupInput.model_validate(
+                {
+                    "userId": "user-1",
+                    "programId": "program-4-5",
+                    "scheduleCode": "schedule-4-5",
+                    "values": {
+                        "Flt Booking Events Event Name": "4 - 5 Years",
+                    },
+                }
+            ),
+            ClassBookingLookupInput.model_validate(
+                {
+                    "userId": "user-1",
+                    "programId": "program-6-7",
+                    "scheduleCode": "schedule-6-7",
+                    "values": {
+                        "Flt Booking Events Event Name": "6 - 7 Years",
+                    },
+                }
+            ),
+        ]
+
+        result = generate_recurring_bookings(request)
+
+        self.assertEqual(result.generatedCount, 1)
+        self.assertEqual(result.rows[0].programId, "program-4-5")
+        self.assertEqual(result.rows[0].scheduleCode, "schedule-4-5")
+
+    def test_duplicate_user_id_without_age_match_uses_last_row(self) -> None:
+        request = self.make_request()
+        request.review_mappings = request.review_mappings[:1]
+        request.kpi_records[0].values["Class Wanted"] = (
+            "THU @ 3:30 PM (8-9 year)"
+        )
+        request.class_booking_lookup = [
+            ClassBookingLookupInput.model_validate(
+                {
+                    "userId": "user-1",
+                    "programId": "program-first",
+                    "scheduleCode": "schedule-first",
+                    "values": {
+                        "Flt Booking Events Event Name": "4 - 5 Years",
+                    },
+                }
+            ),
+            ClassBookingLookupInput.model_validate(
+                {
+                    "userId": "user-1",
+                    "programId": "program-last",
+                    "scheduleCode": "schedule-last",
+                    "values": {
+                        "Flt Booking Events Event Name": "6 - 7 Years",
+                    },
+                }
+            ),
+        ]
+
+        result = generate_recurring_bookings(request)
+
+        self.assertEqual(result.generatedCount, 1)
+        self.assertEqual(result.rows[0].programId, "program-last")
+        self.assertEqual(result.rows[0].scheduleCode, "schedule-last")
+
     def test_supports_glofox_class_booking_export_headers(self) -> None:
         request = self.make_request()
         request.class_booking_lookup = [

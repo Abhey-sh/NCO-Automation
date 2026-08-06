@@ -15,6 +15,8 @@ export interface ReviewMappingRow {
   manualAssignmentState: 'idle' | 'ready' | 'assigned'
 }
 
+const AUTO_SUGGESTION_MIN_SIMILARITY = 70
+
 const normalizeName = (value: string) =>
   value
     .normalize('NFKD')
@@ -63,31 +65,22 @@ function calculateSimilarity(valueA: string, valueB: string): number {
   }
 
   const maxLength = Math.max(left.length, right.length)
-  let distance = 0
-  const leftChars = left.split('')
-  const rightChars = right.split('')
-  const matrix = Array.from({ length: leftChars.length + 1 }, () => Array(rightChars.length + 1).fill(0))
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index)
 
-  for (let i = 0; i <= leftChars.length; i += 1) {
-    matrix[i][0] = i
-  }
-
-  for (let j = 0; j <= rightChars.length; j += 1) {
-    matrix[0][j] = j
-  }
-
-  for (let i = 1; i <= leftChars.length; i += 1) {
-    for (let j = 1; j <= rightChars.length; j += 1) {
-      const cost = leftChars[i - 1] === rightChars[j - 1] ? 0 : 1
-      matrix[i][j] = Math.min(
-        matrix[i - 1][j] + 1,
-        matrix[i][j - 1] + 1,
-        matrix[i - 1][j - 1] + cost,
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const current = [leftIndex]
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const cost = left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1
+      current[rightIndex] = Math.min(
+        current[rightIndex - 1] + 1,
+        previous[rightIndex] + 1,
+        previous[rightIndex - 1] + cost,
       )
     }
+    previous = current
   }
 
-  distance = matrix[leftChars.length][rightChars.length]
+  const distance = previous[right.length]
   const ratio = 1 - distance / maxLength
   return Math.max(0, Math.round(ratio * 100))
 }
@@ -100,6 +93,11 @@ export function buildReviewMappingRows(
     string,
     { member: MembershipPlanLookup; displayName: string }
   >()
+  const suggestionCandidates: Array<{
+    member: MembershipPlanLookup
+    displayName: string
+  }> = []
+  const seenSuggestionCandidates = new Set<string>()
 
   membershipPlanLookup.forEach((member) => {
     const displayName = getMembershipFullName(member)
@@ -109,6 +107,16 @@ export function buildReviewMappingRows(
     if (normalizedName && !membersByNormalizedName.has(normalizedName)) {
       membersByNormalizedName.set(normalizedName, { member, displayName })
     }
+
+    const suggestionKey = `${normalizedName}|${member.email.trim().toLowerCase()}`
+    if (
+      normalizedName &&
+      member.email.trim() &&
+      !seenSuggestionCandidates.has(suggestionKey)
+    ) {
+      seenSuggestionCandidates.add(suggestionKey)
+      suggestionCandidates.push({ member, displayName })
+    }
   })
 
   const results = studentRecords.map((record) => {
@@ -117,18 +125,42 @@ export function buildReviewMappingRows(
     const match = membersByNormalizedName.get(normalizedStudent)
 
     if (!match) {
+      let bestSuggestion:
+        | {
+            member: MembershipPlanLookup
+            displayName: string
+            similarity: number
+          }
+        | undefined
+
+      suggestionCandidates.forEach((candidate) => {
+        const similarity = calculateSimilarity(
+          studentName,
+          candidate.displayName,
+        )
+        if (!bestSuggestion || similarity > bestSuggestion.similarity) {
+          bestSuggestion = { ...candidate, similarity }
+        }
+      })
+
+      const suggested =
+        bestSuggestion &&
+        bestSuggestion.similarity >= AUTO_SUGGESTION_MIN_SIMILARITY
+          ? bestSuggestion
+          : undefined
+
       return {
         studentName,
         phoneNumber: record.phoneNumber,
         matchedMember: '—',
         email: '—',
         matched: false,
-        suggestedMember: '',
-        suggestedEmail: '',
-        similarity: 0,
+        suggestedMember: suggested?.displayName ?? '',
+        suggestedEmail: suggested?.member.email ?? '',
+        similarity: suggested?.similarity ?? 0,
         matchType: null,
-        draftQuery: '',
-        manualAssignmentState: 'idle' as const,
+        draftQuery: suggested?.displayName ?? '',
+        manualAssignmentState: suggested ? 'ready' as const : 'idle' as const,
       }
     }
 
