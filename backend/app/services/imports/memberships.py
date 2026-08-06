@@ -313,9 +313,7 @@ def generate_memberships(request: MembershipRequest) -> MembershipResponse:
                 )
                 continue
             cycle_start_date = request.cycle_start_date.strip()
-            next_payment_date = (
-                source_next_payment_date or request.next_payment_date.strip()
-            )
+            next_payment_date = request.next_payment_date.strip()
 
         formatted_purchase_date = _format_date_time(purchase_date, "00:00:00")
         formatted_commenced_date = _format_date_time(commenced_date, "00:00:00")

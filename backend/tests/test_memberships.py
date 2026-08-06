@@ -176,7 +176,7 @@ class MembershipGeneratorTests(unittest.TestCase):
         self.assertEqual(result.skips[0].email, "future@example.com")
         self.assertIn("Membership ID", result.skips[0].reason)
 
-    def test_supports_simplified_membership_plan_headers(self) -> None:
+    def test_simplified_headers_use_configured_next_payment_for_active(self) -> None:
         request = MembershipRequest.model_validate(
             {
                 "studioId": "studio-1",
@@ -235,7 +235,7 @@ class MembershipGeneratorTests(unittest.TestCase):
         self.assertEqual(row.price, "75")
         self.assertEqual(row.localPurchaseDate, "2026-07-02T00:00:00")
         self.assertEqual(row.localCommencedDate, "2026-07-03T00:00:00")
-        self.assertEqual(row.localNextPaymentDate, "2026-09-05T10:29:30")
+        self.assertEqual(row.localNextPaymentDate, "2026-09-01T10:29:30")
 
     def test_uses_source_next_payment_date_for_future_status(self) -> None:
         request = self.make_request()

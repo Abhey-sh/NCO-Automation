@@ -135,6 +135,13 @@ Uses the completed Review Mapping results, Membership + Plan Name lookup, KPI re
 | Membership | `membership.csv` | Requires Studio ID, cycle/next payment dates, and Membership + Plan Name lookup; reports skipped rows |
 | Recurring Bookings | `recurring_bookings.csv` | Resolves matched emails through UUID and Class Booking data; excludes students with a membership deferral date |
 
+#### Membership Next Payment Date logic
+
+- `ACTIVE` memberships always use the Next Payment Date entered in Configuration. Any source Next Payment Date is ignored.
+- Source memberships with `FUTURE` status use their source Next Payment Date and are skipped when that date is missing.
+- Memberships with a KPI Deferral Date use the Deferral Date as their Next Payment Date and are generated with `FUTURE` status.
+- The output value is formatted as `YYYY-MM-DDT10:29:30`.
+
 Each generator supports preview of the first 50 rows and CSV download.
 
 Before generating Membership Cancellation, Membership, or Recurring Bookings, confirm that EA agreements are disabled. Account Metadata can be generated without this confirmation.
