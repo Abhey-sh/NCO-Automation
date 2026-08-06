@@ -13,7 +13,7 @@ import { cn } from '../../lib/utils'
 const filterOptions = ['All', 'Matched', 'Not Matched'] as const
 const TABLE_ROW_HEIGHT = 58
 const TABLE_OVERSCAN = 6
-const AUTO_ACCEPT_SIMILARITY = 80
+const AUTO_ACCEPT_SIMILARITY = 75
 
 type FilterValue = (typeof filterOptions)[number]
 
